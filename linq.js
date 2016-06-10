@@ -309,7 +309,16 @@ var Enumerable = (function() {
         this.And = function(pred) {
             WherePredicate.And(pred);
 			return this;
-        };
+        };		
+		this.SplitAnd = function(pred){
+			WherePredicate.SplitAnd(pred);
+			return this;
+		}
+		this.SplitOr = function(pred){
+			WherePredicate.SplitOr(pred);
+			return this;
+		}
+		
 		delete this.Where;
     }
     // The private constructor. Define EVERYTHING in here
@@ -434,16 +443,24 @@ var Enumerable = (function() {
 				return firstVal && this.Predicate(item);
 			}
 		}
+		var SplitAndPredicate = function(pred){
+			AndPredicate.apply(this,[pred]);
+		}
 		var OrPredicate = function(pred){
 			this.Predicate = pred;
 			this.Execute = function(firstVal, item){
 				return firstVal || this.Predicate(item);
 			}			
 		}
+		var SplitOrPredicate = function(pred){
+			OrPredicate.apply(this,[pred]);
+		}
+
         var WherePredicate = function(pred) {
             this.Predicate = pred;
 			this.ChainedPredicates = [new OrPredicate(pred)];
 			var scope = this;
+			this.lastResult = false;
 			var initialResult = false;
 			this.Or = function(p){
 				this.ChainedPredicates.push( new OrPredicate(p));
@@ -456,19 +473,44 @@ var Enumerable = (function() {
 				}				
 				this.Execute = ChainedExecute;
 			}
+			this.SplitAnd = function(p){
+				this.ChainedPredicates.push( new SplitAndPredicate(p));
+				if(this.ChainedPredicates.length == 1){
+					initialResult = true;
+				}				
+				this.Execute = ChainedExecute;				
+			}
+			this.SplitOr = function(p){
+				this.ChainedPredicates.push( new SplitOrPredicate(p));		
+				this.Execute = ChainedExecute;				
+			}
 			var ChainedExecute = function(item){
-				var lastResult = initialResult;
+				scope.lastResult = initialResult;
 				for(var i = 0; i <scope.ChainedPredicates.length; i++){
 					var p = scope.ChainedPredicates[i];
-					if(lastResult === false && p instanceof AndPredicate){
-						continue;
+					if(scope.lastResult === false){
+						//(false) && is always false
+						if(p instanceof SplitAndPredicate){
+							return InvalidItem;
+						}
+						//(false && ) may not be false if there is a || following
+						else if(p instanceof AndPredicate){
+							continue;
+						}
+					} else {
+						//(true) || is always true
+						if(p instanceof SplitOrPredicate){
+							return item;
+						} 
+						//(true || ) may be false if there is an &&. ex: ((true || false) && false)
+						else if(p instanceof OrPredicate){
+							continue;
+						}
 					}
-					if(lastResult === true && p instanceof OrPredicate){
-						continue;
-					}
-					lastResult = p.Execute(lastResult,item);
+					scope.lastResult = p.Execute(scope.lastResult,item);
+				
 				}
-				return lastResult ? item : InvalidItem;
+				return scope.lastResult ? item : InvalidItem;
 			}
             this.Execute = function(item) {
                 var passed = this.Predicate(item);

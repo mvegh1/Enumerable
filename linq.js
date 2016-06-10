@@ -102,13 +102,13 @@ var Enumerable = (function() {
 					val[scope.PROPERTY_FOR_HASHING] = id;
 					scope.Hash[id] = obj;
 					scope.Array.push(obj);
-					return id;
+					return val;
 				}
 			} else {
 				if(scope.Hash[val] === undefined){
 					scope.Hash[val] = obj;
 					scope.Array.push(obj);
-					return obj;
+					return val;
 				}
 			}
 			return undefined;
@@ -288,6 +288,29 @@ var Enumerable = (function() {
             return this;
         }
     };
+    function FilteredEnumerable(privateData) {
+        var scope = this;
+        var argsToApply = [{
+            Data: privateData.Data,
+            ForEachActionStack: privateData.ForEachActionStack,
+            Predicates: privateData.Predicates,
+            Scope: scope
+        }];
+        Enumerable.apply(this, argsToApply);
+        // Private variables for module
+        var WherePredicate = privateData.WherePredicate;
+		
+        this.AddToPredicateStack(WherePredicate);
+		
+        this.Or = function(pred) {
+            WherePredicate.Or(pred);
+            return this;
+        };
+        this.And = function(pred) {
+            WherePredicate.And(pred);
+			return this;
+        };
+    }
     // The private constructor. Define EVERYTHING in here
     var Enumerable = function(privateData) {
         var scope = this;
@@ -406,6 +429,18 @@ var Enumerable = (function() {
         }
         var WherePredicate = function(pred) {
             this.Predicate = pred;
+			this.Or = function(p){
+				var oldPred = this.Predicate;
+				this.Predicate = function(item){
+					return oldPred(item) || p(item);
+				}
+			}
+			this.And = function(p){
+				var oldPred = this.Predicate;
+				this.Predicate = function(item){
+					return oldPred(item) && p(item);
+				}
+			}
             this.Execute = function(item) {
                 var passed = this.Predicate(item);
                 if (passed) {
@@ -421,8 +456,13 @@ var Enumerable = (function() {
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
-            data.NewPredicate = new WherePredicate(pred);
-            return new Enumerable(data);
+            if(!pred){
+            	pred = function(item){
+            		return true;
+            	}
+            }
+            data.WherePredicate = new WherePredicate(pred);
+            return new FilteredEnumerable(data);
         }
         var SelectPredicate = function(pred) {
             this.Predicate = pred;
@@ -773,9 +813,10 @@ var Enumerable = (function() {
         var AllPredicate = function(pred) {
             this._predicate = pred;
             this._all = true;
+			var scope = this;
             this.Predicate = function(i, v) {
-                if (this._predicate(v) === false) {
-                    this._all = false;
+                if (scope._predicate(v) === false) {
+                    scope._all = false;
                     return false;
                 }
             }
@@ -792,7 +833,7 @@ var Enumerable = (function() {
                 return true;
             }
             var p = new AllPredicate(pred);
-            return p.Execute(SCOPE);
+            return p.Execute(scope);
         }
         scope.Contains = function(item) {
             return scope.IndexOf(item) > -1;

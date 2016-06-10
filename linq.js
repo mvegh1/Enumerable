@@ -26,6 +26,10 @@ var Enumerable = (function() {
 		if(data.ToArray){
 			return data.ToArray();
 		}
+		try {
+			return Array.from(data);			
+		}
+		catch(e){}
 		throw Error("Could not parse the input to an array");
 	}
 	function ParseDataAsEnumerable(data){
@@ -35,6 +39,10 @@ var Enumerable = (function() {
 		if(data.ToArray){
 			return data;
 		}
+		try {
+			return new Enumerable({Data: Array.from(data)});			
+		}
+		catch(e){}
 		throw Error("Could not parse the input to an enumerable");
 	}	
 	function ResetPredicates(Predicates){
@@ -61,14 +69,17 @@ var Enumerable = (function() {
 					break;
 				}
 			}
-			if (item !== InvalidItem) {
-				idx++;
-				if (terminatingCondition(idx, item) === false) {
-					return;
-				}
+			if (item === InvalidItem) {
+				continue;
 			}
+			idx++;
+			if (terminatingCondition(idx, item) === false) {
+				return;
+			}
+
 		}
-		ResetPredicates(Predicates);		
+		ResetPredicates(Predicates);	
+	    return;		
 	}
     function CreateGuid() {
         var alphabet = "abcdefghijklmnnopqrstuvwxyz0123456789".split("");
@@ -439,6 +450,7 @@ var Enumerable = (function() {
             var arr = scope.Data;
             arr = scope.ForEachActionStack(arr);
             ProcessPredicatesNoReturn(scope.Predicates, arr, action);
+			return;
         }
 		var AndPredicate = function(pred){
 			this.Predicate = pred;

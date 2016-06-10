@@ -37,6 +37,12 @@ var Enumerable = (function() {
 		}
 		throw Error("Could not parse the input to an enumerable");
 	}	
+	function ResetPredicates(Predicates){
+		for (var i = 0; i < Predicates.length; i++) {
+			var pred = Predicates[i];
+			pred.Reset();
+		}
+	}
     function CreateGuid() {
         var alphabet = "abcdefghijklmnnopqrstuvwxyz0123456789".split("");
         var guid = "";
@@ -301,12 +307,10 @@ var Enumerable = (function() {
             scope.Predicates.push(pred);
         }
         scope.ProcessPredicates = function(Predicates, data, terminatingCondition) {
+            ResetPredicates(Predicates);
+			
             if (Predicates.length === 0 && !terminatingCondition) {
                 return data;
-            }
-            for (var i = 0; i < Predicates.length; i++) {
-                var pred = Predicates[i];
-                pred.Reset();
             }
 			
 			if(terminatingCondition === undefined){
@@ -325,6 +329,7 @@ var Enumerable = (function() {
 						arr.push(item);
 					}
 				}
+				ResetPredicates(Predicates);
 				return arr;				
 			}
 			
@@ -349,6 +354,7 @@ var Enumerable = (function() {
                     arr.push(item);
                 }
             }
+            ResetPredicates(Predicates);
             return arr;
         }
         // Private variables for module

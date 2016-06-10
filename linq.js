@@ -302,24 +302,25 @@ var Enumerable = (function() {
 		
         this.AddToPredicateStack(WherePredicate);
 		
+		function Composite(pred){
+			// Remove the old WherePredicate from the stack
+			var preds = scope.Predicates.splice(0,scope.Predicates.length-1);
+            var newArgs = {Data: scope.Data,ForEachActionStack:scope.ForEachActionStack,Predicates:preds};
+			newArgs.WherePredicate = pred;
+            return new FilteredEnumerable(newArgs);			
+		}
         this.Or = function(pred) {
-            WherePredicate.Or(pred);
-            return this;
+			return Composite(WherePredicate.Or(pred));
         };
         this.And = function(pred) {
-            WherePredicate.And(pred);
-			return this;
+			return Composite(WherePredicate.And(pred));
         };		
 		this.SplitAnd = function(pred){
-			WherePredicate.SplitAnd(pred);
-			return this;
+			return Composite(WherePredicate.SplitAnd(pred));
 		}
 		this.SplitOr = function(pred){
-			WherePredicate.SplitOr(pred);
-			return this;
+			return Composite(WherePredicate.SplitOr(pred));
 		}
-		
-		delete this.Where;
     }
     // The private constructor. Define EVERYTHING in here
     var Enumerable = function(privateData) {
@@ -462,29 +463,26 @@ var Enumerable = (function() {
 			var scope = this;
 			this.lastResult = false;
 			var initialResult = false;
+			function Composite(p){
+				var clone = new WherePredicate(scope.Predicate);
+				clone.ChainedPredicates = scope.ChainedPredicates.slice();
+				clone.ChainedPredicates.push(p);
+				clone.Execute = clone.ChainedExecute;
+				return clone;
+			}
 			this.Or = function(p){
-				this.ChainedPredicates.push( new OrPredicate(p));
-				this.Execute = ChainedExecute;
+				return Composite(new OrPredicate(p));
 			}
 			this.And = function(p){
-				this.ChainedPredicates.push( new AndPredicate(p));
-				if(this.ChainedPredicates.length == 1){
-					initialResult = true;
-				}				
-				this.Execute = ChainedExecute;
+				return Composite(new AndPredicate(p));
 			}
 			this.SplitAnd = function(p){
-				this.ChainedPredicates.push( new SplitAndPredicate(p));
-				if(this.ChainedPredicates.length == 1){
-					initialResult = true;
-				}				
-				this.Execute = ChainedExecute;				
+				return Composite(new SplitAndPredicate(p));			
 			}
 			this.SplitOr = function(p){
-				this.ChainedPredicates.push( new SplitOrPredicate(p));		
-				this.Execute = ChainedExecute;				
+				return Composite( new SplitOrPredicate(p));					
 			}
-			var ChainedExecute = function(item){
+			scope.ChainedExecute = function(item){
 				scope.lastResult = initialResult;
 				for(var i = 0; i <scope.ChainedPredicates.length; i++){
 					var p = scope.ChainedPredicates[i];

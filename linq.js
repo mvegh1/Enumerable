@@ -310,6 +310,7 @@ var Enumerable = (function() {
             WherePredicate.And(pred);
 			return this;
         };
+		delete this.Where;
     }
     // The private constructor. Define EVERYTHING in here
     var Enumerable = function(privateData) {
@@ -427,19 +428,47 @@ var Enumerable = (function() {
             arr = scope.ProcessPredicates(scope.Predicates, arr, action);
             return arr;
         }
+		var AndPredicate = function(pred){
+			this.Predicate = pred;
+			this.Execute = function(firstVal, item){
+				return firstVal && this.Predicate(item);
+			}
+		}
+		var OrPredicate = function(pred){
+			this.Predicate = pred;
+			this.Execute = function(firstVal, item){
+				return firstVal || this.Predicate(item);
+			}			
+		}
         var WherePredicate = function(pred) {
             this.Predicate = pred;
+			this.ChainedPredicates = [new OrPredicate(pred)];
+			var scope = this;
+			var initialResult = false;
 			this.Or = function(p){
-				var oldPred = this.Predicate;
-				this.Predicate = function(item){
-					return oldPred(item) || p(item);
-				}
+				this.ChainedPredicates.push( new OrPredicate(p));
+				this.Execute = ChainedExecute;
 			}
 			this.And = function(p){
-				var oldPred = this.Predicate;
-				this.Predicate = function(item){
-					return oldPred(item) && p(item);
+				this.ChainedPredicates.push( new AndPredicate(p));
+				if(this.ChainedPredicates.length == 1){
+					initialResult = true;
+				}				
+				this.Execute = ChainedExecute;
+			}
+			var ChainedExecute = function(item){
+				var lastResult = initialResult;
+				for(var i = 0; i <scope.ChainedPredicates.length; i++){
+					var p = scope.ChainedPredicates[i];
+					if(lastResult === false && p instanceof AndPredicate){
+						continue;
+					}
+					if(lastResult === true && p instanceof OrPredicate){
+						continue;
+					}
+					lastResult = p.Execute(lastResult,item);
 				}
+				return lastResult ? item : InvalidItem;
 			}
             this.Execute = function(item) {
                 var passed = this.Predicate(item);
@@ -456,11 +485,11 @@ var Enumerable = (function() {
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
-            if(!pred){
-            	pred = function(item){
-            		return true;
-            	}
-            }
+			if(!pred){
+				pred = function(item){
+					return false;
+				}
+			}
             data.WherePredicate = new WherePredicate(pred);
             return new FilteredEnumerable(data);
         }

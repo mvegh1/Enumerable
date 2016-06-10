@@ -43,6 +43,33 @@ var Enumerable = (function() {
 			pred.Reset();
 		}
 	}
+	function ProcessPredicatesNoReturn(Predicates,data,terminatingCondition){
+		ResetPredicates(Predicates);
+		
+		// No action was specified
+		if (!terminatingCondition) {
+			return;
+		}
+	
+		var idx = -1;
+		for (var len = data.length, i = 0; i !== len; i++) {
+			var item = data[i];
+			for (var j = 0, len2 = Predicates.length; j != len2; j++) {
+				var Predicate = Predicates[j];
+				item = Predicate.Execute(item);
+				if (item === InvalidItem) {
+					break;
+				}
+			}
+			if (item !== InvalidItem) {
+				idx++;
+				if (terminatingCondition(idx, item) === false) {
+					return;
+				}
+			}
+		}
+		ResetPredicates(Predicates);		
+	}
     function CreateGuid() {
         var alphabet = "abcdefghijklmnnopqrstuvwxyz0123456789".split("");
         var guid = "";
@@ -340,56 +367,31 @@ var Enumerable = (function() {
         scope.AddToPredicateStack = function(pred) {
             scope.Predicates.push(pred);
         }
-        scope.ProcessPredicates = function(Predicates, data, terminatingCondition) {
+		
+        scope.ProcessPredicates = function(Predicates, data) {
             ResetPredicates(Predicates);
 			
-            if (Predicates.length === 0 && !terminatingCondition) {
+            if (Predicates.length === 0) {
                 return data;
             }
 			
-			if(terminatingCondition === undefined){
-				var arr = [];
-				var idx = -1;
-				for (var len = data.length, i = 0; i !== len; i++) {
-					var item = data[i];
-					for (var j = 0, len2 = Predicates.length; j != len2; j++) {
-						var Predicate = Predicates[j];
-						item = Predicate.Execute(item);
-						if (item === InvalidItem) {
-							break;
-						}
-					}
-					if (item !== InvalidItem) {
-						arr.push(item);
+			var arr = [];
+			var idx = -1;
+			for (var len = data.length, i = 0; i !== len; i++) {
+				var item = data[i];
+				for (var j = 0, len2 = Predicates.length; j != len2; j++) {
+					var Predicate = Predicates[j];
+					item = Predicate.Execute(item);
+					if (item === InvalidItem) {
+						break;
 					}
 				}
-				ResetPredicates(Predicates);
-				return arr;				
+				if (item !== InvalidItem) {
+					arr.push(item);
+				}
 			}
-			
-            var arr = [];
-            var idx = -1;
-            for (var len = data.length, i = 0; i !== len; i++) {
-                var item = data[i];
-                for (var j = 0, len2 = Predicates.length; j != len2; j++) {
-                    var Predicate = Predicates[j];
-                    item = Predicate.Execute(item);
-                    if (item === InvalidItem) {
-                        break;
-                    }
-                }
-                if (item !== InvalidItem) {
-                    idx++;
-                    if (terminatingCondition !== null) {
-                        if (terminatingCondition(idx, item) === false) {
-                            return arr;
-                        }
-                    }
-                    arr.push(item);
-                }
-            }
-            ResetPredicates(Predicates);
-            return arr;
+			ResetPredicates(Predicates);
+			return arr;				
         }
         // Private variables for module
         scope.Data = privateData.Data || [];
@@ -414,8 +416,10 @@ var Enumerable = (function() {
             });
         }
         scope.ToArray = function() {
-            //console.log("Original ToArray");
-            return scope.ForEach();
+            var arr = scope.Data;
+            arr = scope.ForEachActionStack(arr);
+            arr = scope.ProcessPredicates(scope.Predicates, arr);
+            return arr;
         }
         scope.ToDictionary = function(predKey, predVal) {
             var arr = scope.ToArray();
@@ -432,11 +436,9 @@ var Enumerable = (function() {
             return rtn;
         }
         scope.ForEach = function(action) {
-            //console.log("Original ForEach");
             var arr = scope.Data;
             arr = scope.ForEachActionStack(arr);
-            arr = scope.ProcessPredicates(scope.Predicates, arr, action);
-            return arr;
+            ProcessPredicatesNoReturn(scope.Predicates, arr, action);
         }
 		var AndPredicate = function(pred){
 			this.Predicate = pred;

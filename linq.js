@@ -1,11 +1,11 @@
 
 'use strict';
-var Enumerable = (function() {
+let Enumerable = (function() {
     // Private constant variables for module
-    var FOR_EACH_ACTION_STACK_REF = function(arr) {
+    let FOR_EACH_ACTION_STACK_REF = function(arr) {
         return arr;
     };
-    var InvalidItem;
+    let InvalidItem;
     // Private Classes for module
     function Group(key) {
         this.Key = key;
@@ -13,7 +13,7 @@ var Enumerable = (function() {
     }
     // the module API
     function PublicEnumerable(data) {
-		var d = ParseDataAsArray(data);
+		let d = ParseDataAsArray(data);
         return new Enumerable({
             Data: d
         });
@@ -46,8 +46,8 @@ var Enumerable = (function() {
 		throw Error("Could not parse the input to an enumerable");
 	}	
 	function ResetPredicates(Predicates){
-		for (var i = 0; i < Predicates.length; i++) {
-			var pred = Predicates[i];
+		for (let i = 0; i < Predicates.length; i++) {
+			let pred = Predicates[i];
 			pred.Reset();
 		}
 	}
@@ -59,11 +59,11 @@ var Enumerable = (function() {
 			return;
 		}
 	
-		var idx = -1;
-		for (var len = data.length, i = 0; i !== len; i++) {
-			var item = data[i];
-			for (var j = 0, len2 = Predicates.length; j != len2; j++) {
-				var Predicate = Predicates[j];
+		let idx = -1;
+		for (let len = data.length, i = 0; i !== len; i++) {
+			let item = data[i];
+			for (let j = 0, len2 = Predicates.length; j != len2; j++) {
+				let Predicate = Predicates[j];
 				item = Predicate.Execute(item);
 				if (item === InvalidItem) {
 					break;
@@ -82,12 +82,12 @@ var Enumerable = (function() {
 	    return;		
 	}
     function CreateGuid() {
-        var alphabet = "abcdefghijklmnnopqrstuvwxyz0123456789".split("");
-        var guid = "";
-        for (var i = 0; i < 5; i++) {
-            for (var j = 0; j < 4; j++) {
-                var idx = Math.floor(alphabet.length * Math.random());
-                var letter = alphabet[idx];
+        let alphabet = "abcdefghijklmnnopqrstuvwxyz0123456789".split("");
+        let guid = "";
+        for (let i = 0; i < 5; i++) {
+            for (let j = 0; j < 4; j++) {
+                let idx = Math.floor(alphabet.length * Math.random());
+                let letter = alphabet[idx];
                 guid += letter;
             }
             if (i < 4) {
@@ -102,7 +102,7 @@ var Enumerable = (function() {
 		this.Array = [];
 		this.Predicate = pred;
 		this.PROPERTY_FOR_HASHING = "HASH_CHECK_" + CreateGuid();
-		var scope = this;
+		let scope = this;
 		this.ExtractValue = function(obj){
 			if(scope.Predicate){
 				return scope.Predicate(obj);
@@ -110,12 +110,12 @@ var Enumerable = (function() {
 			return obj;
 		}
 		this.ContainsItem = function(obj){
-			var val = this.ExtractValue(obj);
+			let val = this.ExtractValue(obj);
 			return this.ContainsFromExtractedValue(val);
 		}
 		this.ContainsFromExtractedValue = function(val){
 			if( typeof val === "object" ){
-				var id = val[scope.PROPERTY_FOR_HASHING];				
+				let id = val[scope.PROPERTY_FOR_HASHING];				
 				if(id === undefined ){
 					return false;
 				}
@@ -131,9 +131,9 @@ var Enumerable = (function() {
 			}			
 		}
 		this.TryAdd = function(obj){
-			var val = scope.ExtractValue(obj);
+			let val = scope.ExtractValue(obj);
 			if( typeof val === "object" ){
-				var id = val[scope.PROPERTY_FOR_HASHING];				
+				let id = val[scope.PROPERTY_FOR_HASHING];				
 				//If the id is undefined, that means the object was never added
 				if(id === undefined){
 					id = CreateGuid();
@@ -154,17 +154,17 @@ var Enumerable = (function() {
 		
 		// Flushes the hash and outputs as array
 		this.Flush = function(){
-			var rtn = this.Array;
+			let rtn = this.Array;
 			this.Clear();
 			return rtn;
 		}
 		
 		this.Clear = function(){
-			var hash = scope.Hash;
-			var keys = Object.keys(hash);
-			for(var i = 0; i < keys.length; i++){
-				var key = keys[i];
-				var item = hash[key];
+			let hash = scope.Hash;
+			let keys = Object.keys(hash);
+			for(let i = 0; i < keys.length; i++){
+				let key = keys[i];
+				let item = hash[key];
 				delete item[scope.PROPERTY_FOR_HASHING];
 			}	
 			scope.Hash = {};
@@ -172,110 +172,112 @@ var Enumerable = (function() {
 		}
 
 	}
-    var OrderPredicate = function(pred, desc) {
-        this.SortFunctions = [];
-        var scope = this;
-        this.SortComparer = null;
-        this.Composite = function(newPred, newDesc) {
-            if (this.SortComparer === null) {
-                if (desc) {
-                    this.SortComparer = function(a, b) {
-                        var val1 = newPred(a);
-                        var val2 = newPred(b);
-                        if (val1 < val2) {
-                            return 1;
-                        }
-                        if (val1 > val2) {
-                            return -1;
-                        }
-                        return 0;
-                    };
-                } else {
-                    this.SortComparer = function(a, b) {
-                        var val1 = newPred(a);
-                        var val2 = newPred(b);
-                        if (val1 < val2) {
-                            return -1;
-                        }
-                        if (val1 > val2) {
-                            return 1;
-                        }
-                        return 0;
-                    };
-                }
-                return;
-            }
-            var oldSort = this.SortComparer;
-            if (newDesc) {
-                this.SortComparer = function(a, b) {
-                    var oldRes = oldSort(a, b);
-                    if (oldRes !== 0) {
-                        return oldRes;
-                    }
-                    var val1 = newPred(a);
-                    var val2 = newPred(b);
-                    if (val1 < val2) {
-                        return 1;
-                    }
-                    if (val1 > val2) {
-                        return -1;
-                    }
-                    return 0;
-                };
-            } else {
-                this.SortComparer = function(a, b) {
-                    var oldRes = oldSort(a, b);
-                    if (oldRes !== 0) {
-                        return oldRes;
-                    }
-                    var val1 = newPred(a);
-                    var val2 = newPred(b);
-                    if (val1 < val2) {
-                        return -1;
-                    }
-                    if (val1 > val2) {
-                        return 1;
-                    }
-                    return 0;
-                };
-            }
-        };
-        this.Execute = function(array) {
-            return array.sort(scope.SortComparer);
-        };
-        this.Composite(pred, desc);
-    };
+	
+	let OrderPredicate = function(pred, desc) {
+		this.SortFunctions = [];
+		let scope = this;
+		this.SortComparer = null;
+		this.Composite = function(newPred, newDesc) {
+			if (this.SortComparer === null) {
+				if (desc) {
+					this.SortComparer = function(a, b) {
+						let val1 = newPred(a);
+						let val2 = newPred(b);
+						if (val1 < val2) {
+							return 1;
+						}
+						if (val1 > val2) {
+							return -1;
+						}
+						return 0;
+					};
+				} else {
+					this.SortComparer = function(a, b) {
+						let val1 = newPred(a);
+						let val2 = newPred(b);
+						if (val1 < val2) {
+							return -1;
+						}
+						if (val1 > val2) {
+							return 1;
+						}
+						return 0;
+					};
+				}
+				return;
+			}
+			let oldSort = this.SortComparer;
+			if (newDesc) {
+				this.SortComparer = function(a, b) {
+					let oldRes = oldSort(a, b);
+					if (oldRes !== 0) {
+						return oldRes;
+					}
+					let val1 = newPred(a);
+					let val2 = newPred(b);
+					if (val1 < val2) {
+						return 1;
+					}
+					if (val1 > val2) {
+						return -1;
+					}
+					return 0;
+				};
+			} else {
+				this.SortComparer = function(a, b) {
+					let oldRes = oldSort(a, b);
+					if (oldRes !== 0) {
+						return oldRes;
+					}
+					let val1 = newPred(a);
+					let val2 = newPred(b);
+					if (val1 < val2) {
+						return -1;
+					}
+					if (val1 > val2) {
+						return 1;
+					}
+					return 0;
+				};
+			}
+		};
+		this.Execute = function(array) {
+			return array.sort(scope.SortComparer);
+		};
+		this.Composite(pred, desc);
+	};
 
-    function OrderedEnumerable(privateData) {
-        var scope = this;
-        var argsToApply = [{
-            Data: privateData.Data,
-            ForEachActionStack: privateData.ForEachActionStack,
-            Predicates: privateData.Predicates,
-            Scope: scope
-        }];
-        Enumerable.apply(this, argsToApply);
-        // Private variables for module
-        var Descending = privateData.Descending;
-        var SortComparer = privateData.SortComparer;
-        var SortingPredicate = new OrderPredicate(SortComparer, Descending);
-        this.AddToForEachStack(function(arr) {
-            SortingPredicate.Execute(arr);
-            return arr;
-        });
-        this.ThenByDescending = function(pred) {
-            SortingPredicate.Composite(pred, true);
-            return this;
-        };
-        this.ThenBy = function(pred) {
-            SortingPredicate.Composite(pred, false);
+	function OrderedEnumerable(privateData) {
+		let scope = this;
+		let argsToApply = [{
+			Data: privateData.Data,
+			ForEachActionStack: privateData.ForEachActionStack,
+			Predicates: privateData.Predicates,
+			Scope: scope
+		}];
+		Enumerable.apply(this, argsToApply);
+		// Private variables for module
+		let Descending = privateData.Descending;
+		let SortComparer = privateData.SortComparer;
+		let SortingPredicate = new OrderPredicate(SortComparer, Descending);
+		this.AddToForEachStack(function(arr) {
+			SortingPredicate.Execute(arr);
+			return arr;
+		});
+		this.ThenByDescending = function(pred) {
+			SortingPredicate.Composite(pred, true);
 			return this;
-        };
-    }
+		};
+		this.ThenBy = function(pred) {
+			SortingPredicate.Composite(pred, false);
+			return this;
+		};
+	}
+
 
     function GroupedEnumerable(privateData) {
-        var scope = this;
-        var argsToApply = [{
+        let scope = this;
+        let argsToApply = [{
             Data: privateData.Data,
             ForEachActionStack: privateData.ForEachActionStack,
             Predicates: privateData.Predicates,
@@ -283,18 +285,18 @@ var Enumerable = (function() {
         }];
         Enumerable.apply(this, argsToApply);
         // Private variables for module
-        var pred = privateData.GroupingPredicate;
+        let pred = privateData.GroupingPredicate;
         this.AddToForEachStack(function(arr) {
-            var groups = [];
-            var groupsIdx = [];
-            for (var i = 0; i < arr.length; i++) {
-                var item = arr[i];
-                var key = pred(item);
+            let groups = [];
+            let groupsIdx = [];
+            for (let i = 0; i < arr.length; i++) {
+                let item = arr[i];
+                let key = pred(item);
                 if (groupsIdx[key] == undefined) {
                     groupsIdx[key] = groups.length;
                     groups.push(new Group(key));
                 }
-                var idx = groupsIdx[key];
+                let idx = groupsIdx[key];
                 groups[idx].Items.push(item);
             }
             arr = groups;
@@ -302,19 +304,19 @@ var Enumerable = (function() {
         });
         this.ThenBy = function(pred) {
             this.AddToForEachStack(function(arr) {
-                var groups = [];
-                for (var i = 0; i < arr.length; i++) {
-                    var groups2 = [];
-                    var groupsIdx2 = [];
-                    var group = arr[i];
-                    for (var j = 0; j < group.Items.length; j++) {
-                        var item = group.Items[j];
-                        var key = pred(item);
+                let groups = [];
+                for (let i = 0; i < arr.length; i++) {
+                    let groups2 = [];
+                    let groupsIdx2 = [];
+                    let group = arr[i];
+                    for (let j = 0; j < group.Items.length; j++) {
+                        let item = group.Items[j];
+                        let key = pred(item);
                         if (groupsIdx2[key] == undefined) {
                             groupsIdx2[key] = groups2.length;
                             groups2.push(new Group(key));
                         }
-                        var idx = groupsIdx2[key];
+                        let idx = groupsIdx2[key];
                         groups2[idx].Items.push(item);
                     }
                     group.Items = groups2;
@@ -327,8 +329,8 @@ var Enumerable = (function() {
         }
     };
     function FilteredEnumerable(privateData) {
-        var scope = this;
-        var argsToApply = [{
+        let scope = this;
+        let argsToApply = [{
             Data: privateData.Data,
             ForEachActionStack: privateData.ForEachActionStack,
             Predicates: privateData.Predicates,
@@ -336,14 +338,14 @@ var Enumerable = (function() {
         }];
         Enumerable.apply(this, argsToApply);
         // Private variables for module
-        var WherePredicate = privateData.WherePredicate;
+        let WherePredicate = privateData.WherePredicate;
 		
         this.AddToPredicateStack(WherePredicate);
 		
 		function Composite(pred){
 			// Remove the old WherePredicate from the stack
-			var preds = scope.Predicates.splice(0,scope.Predicates.length-1);
-            var newArgs = {Data: scope.Data,ForEachActionStack:scope.ForEachActionStack,Predicates:preds};
+			let preds = scope.Predicates.splice(0,scope.Predicates.length-1);
+            let newArgs = {Data: scope.Data,ForEachActionStack:scope.ForEachActionStack,Predicates:preds};
 			newArgs.WherePredicate = pred;
             return new FilteredEnumerable(newArgs);			
 		}
@@ -361,19 +363,20 @@ var Enumerable = (function() {
 		}
     }
     // The private constructor. Define EVERYTHING in here
-    var Enumerable = function(privateData) {
-        var scope = this;
+    let Enumerable = function(privateData) {
+        let scope = this;
         // Private methods for module
         scope.AddToForEachStack = function(action) {
-            var oldFeA = scope.ForEachActionStack;
-            var oldPredicate = scope.Predicates.slice();
+            let oldFeA = scope.ForEachActionStack[scope.ForEachActionStack.length-1];
+            let oldPredicate = scope.Predicates.slice();
             scope.Predicates = [];
-            scope.ForEachActionStack = function(arr) {
-                var newArr = oldFeA(arr);
+            let newFeA = function(arr) {
+                let newArr = oldFeA(arr);
                 newArr = scope.ProcessPredicates(oldPredicate, newArr);
                 newArr = action(newArr);
                 return newArr;
             }
+			scope.ForEachActionStack.push(newFeA);
         }
         scope.AddToPredicateStack = function(pred) {
             scope.Predicates.push(pred);
@@ -386,12 +389,12 @@ var Enumerable = (function() {
                 return data;
             }
 			
-			var arr = [];
-			var idx = -1;
-			for (var len = data.length, i = 0; i !== len; i++) {
-				var item = data[i];
-				for (var j = 0, len2 = Predicates.length; j != len2; j++) {
-					var Predicate = Predicates[j];
+			let arr = [];
+			let idx = -1;
+			for (let len = data.length, i = 0; i !== len; i++) {
+				let item = data[i];
+				for (let j = 0, len2 = Predicates.length; j != len2; j++) {
+					let Predicate = Predicates[j];
 					item = Predicate.Execute(item);
 					if (item === InvalidItem) {
 						break;
@@ -410,7 +413,10 @@ var Enumerable = (function() {
         if (privateData.Predicates) {
             scope.Predicates = privateData.Predicates.slice();
         }
-        scope.ForEachActionStack = privateData.ForEachActionStack || FOR_EACH_ACTION_STACK_REF;
+        scope.ForEachActionStack = [FOR_EACH_ACTION_STACK_REF];		
+        if (privateData.ForEachActionStack) {
+            scope.ForEachActionStack = privateData.ForEachActionStack.slice();
+        }
         if (privateData.NewForEachAction) {
             scope.AddToForEachStack(privateData.NewForEachAction);
         }
@@ -421,24 +427,24 @@ var Enumerable = (function() {
             return item == InvalidItem;
         }
         scope.ToEnumerable = function() {
-            var arr = scope.ToArray();
+            let arr = scope.ToArray();
             return new Enumerable({
                 Data: arr
             });
         }
         scope.ToArray = function() {
-            var arr = scope.Data;
-            arr = scope.ForEachActionStack(arr);
+            let arr = scope.Data;
+            arr = scope.ForEachActionStack[scope.ForEachActionStack.length-1](arr);
             arr = scope.ProcessPredicates(scope.Predicates, arr);
             return arr;
         }
         scope.ToDictionary = function(predKey, predVal) {
-            var arr = scope.ToArray();
-            var rtn = {};
-            for (var i = 0; i < arr.length; i++) {
-                var item = arr[i];
-                var key = predKey(item).toString();
-                var val = predVal(item);
+            let arr = scope.ToArray();
+            let rtn = {};
+            for (let i = 0; i < arr.length; i++) {
+                let item = arr[i];
+                let key = predKey(item).toString();
+                let val = predVal(item);
                 if (rtn[key] !== undefined) {
                     throw Error("Dictionary already contains the specified key: " + key);
                 }
@@ -447,38 +453,38 @@ var Enumerable = (function() {
             return rtn;
         }
         scope.ForEach = function(action) {
-            var arr = scope.Data;
-            arr = scope.ForEachActionStack(arr);
+            let arr = scope.Data;
+            arr = scope.ForEachActionStack[scope.ForEachActionStack.length-1](arr);
             ProcessPredicatesNoReturn(scope.Predicates, arr, action);
 			return;
         }
-		var AndPredicate = function(pred){
+		let AndPredicate = function(pred){
 			this.Predicate = pred;
 			this.Execute = function(firstVal, item){
 				return firstVal && this.Predicate(item);
 			}
 		}
-		var SplitAndPredicate = function(pred){
+		let SplitAndPredicate = function(pred){
 			AndPredicate.apply(this,[pred]);
 		}
-		var OrPredicate = function(pred){
+		let OrPredicate = function(pred){
 			this.Predicate = pred;
 			this.Execute = function(firstVal, item){
 				return firstVal || this.Predicate(item);
 			}			
 		}
-		var SplitOrPredicate = function(pred){
+		let SplitOrPredicate = function(pred){
 			OrPredicate.apply(this,[pred]);
 		}
 
-        var WherePredicate = function(pred) {
+        let WherePredicate = function(pred) {
             this.Predicate = pred;
 			this.ChainedPredicates = [new OrPredicate(pred)];
-			var scope = this;
+			let scope = this;
 			this.lastResult = false;
-			var initialResult = false;
+			let initialResult = false;
 			function Composite(p){
-				var clone = new WherePredicate(scope.Predicate);
+				let clone = new WherePredicate(scope.Predicate);
 				clone.ChainedPredicates = scope.ChainedPredicates.slice();
 				clone.ChainedPredicates.push(p);
 				clone.Execute = clone.ChainedExecute;
@@ -498,8 +504,8 @@ var Enumerable = (function() {
 			}
 			scope.ChainedExecute = function(item){
 				scope.lastResult = initialResult;
-				for(var i = 0; i <scope.ChainedPredicates.length; i++){
-					var p = scope.ChainedPredicates[i];
+				for(let i = 0; i <scope.ChainedPredicates.length; i++){
+					let p = scope.ChainedPredicates[i];
 					if(scope.lastResult === false){
 						//(false) && is always false
 						if(p instanceof SplitAndPredicate){
@@ -525,7 +531,7 @@ var Enumerable = (function() {
 				return scope.lastResult ? item : InvalidItem;
 			}
             this.Execute = function(item) {
-                var passed = this.Predicate(item);
+                let passed = this.Predicate(item);
                 if (passed) {
                     return item;
                 }
@@ -534,7 +540,7 @@ var Enumerable = (function() {
             this.Reset = function() {}
         }
         scope.Where = function(pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
@@ -547,7 +553,7 @@ var Enumerable = (function() {
             data.WherePredicate = new WherePredicate(pred);
             return new FilteredEnumerable(data);
         }
-        var SelectPredicate = function(pred) {
+        let SelectPredicate = function(pred) {
             this.Predicate = pred;
             this.Execute = function(item) {
                 return this.Predicate(item)
@@ -555,7 +561,7 @@ var Enumerable = (function() {
             this.Reset = function() {}
         }
         scope.Select = function(pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
@@ -564,21 +570,21 @@ var Enumerable = (function() {
             return new Enumerable(data);
         }
         scope.SelectMany = function(pred, selectPred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
 			data.NewForEachAction = function(arr){
-				var sPred = new SelectPredicate(pred);	
-				var rtn = [];
-				for(var i = 0; i < arr.length; i++){
-					var item = arr[i];
-					var selected = sPred.Execute(item);
+				let sPred = new SelectPredicate(pred);	
+				let rtn = [];
+				for(let i = 0; i < arr.length; i++){
+					let item = arr[i];
+					let selected = sPred.Execute(item);
 					selected = ParseDataAsArray(selected);
-					for(var j = 0; j < selected.length; j++){
-						var jItem = selected[j];
-						var converted = selectPred(item,jItem);
+					for(let j = 0; j < selected.length; j++){
+						let jItem = selected[j];
+						let converted = selectPred(item,jItem);
 						rtn.push(converted);
 					}
 				}
@@ -586,11 +592,11 @@ var Enumerable = (function() {
 			}
             return new Enumerable(data);
         }
-        var DistinctPredicate = function(pred) {
+        let DistinctPredicate = function(pred) {
 			this.Hash = new HashMap(pred);
             this.Predicate = function(item) {
 				// returns undefined in failed, otherwise returns the item
-				var result = this.Hash.TryAdd(item);
+				let result = this.Hash.TryAdd(item);
                 return result;
             }
             this.Execute = function(item) {
@@ -601,16 +607,16 @@ var Enumerable = (function() {
             }
         }
         scope.Distinct = function(pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
-            var distinctHash = [];
+            let distinctHash = [];
             data.NewPredicate = new DistinctPredicate(pred);
             return new Enumerable(data);
         }
-        var SkipPredicate = function(cnt) {
+        let SkipPredicate = function(cnt) {
             this.Skipped = 0;
             this.SkipCount = cnt;
             this.Predicate = function(item) {
@@ -628,7 +634,7 @@ var Enumerable = (function() {
             }
         }
         scope.Skip = function(cnt) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
@@ -636,7 +642,7 @@ var Enumerable = (function() {
             data.NewPredicate = new SkipPredicate(cnt);
             return new Enumerable(data);
         }
-        var SkipWhilePredicate = function(pred) {
+        let SkipWhilePredicate = function(pred) {
             this.CanSkip = true;
             this._predicate = pred;
             this.Predicate = function(item) {
@@ -657,7 +663,7 @@ var Enumerable = (function() {
             }
         }
         scope.SkipWhile = function(pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
@@ -665,7 +671,7 @@ var Enumerable = (function() {
             data.NewPredicate = new SkipWhilePredicate(pred);
             return new Enumerable(data);
         }
-        var TakePredicate = function(cnt) {
+        let TakePredicate = function(cnt) {
             this.Took = 0;
             this.TakeCount = cnt;
             this.Predicate = function(item) {
@@ -683,7 +689,7 @@ var Enumerable = (function() {
             }
         }
         scope.Take = function(cnt) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
@@ -691,7 +697,7 @@ var Enumerable = (function() {
             data.NewPredicate = new TakePredicate(cnt);
             return new Enumerable(data);
         }
-        var TakeWhilePredicate = function(pred) {
+        let TakeWhilePredicate = function(pred) {
             this.CanTake = true;
             this._predicate = pred;
             this.Predicate = function(item) {
@@ -712,7 +718,7 @@ var Enumerable = (function() {
             }
         }
         scope.TakeWhile = function(pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
@@ -721,16 +727,16 @@ var Enumerable = (function() {
             return new Enumerable(data);
         }
         scope.TakeExceptLast = function(cnt) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             cnt = cnt || 1;
             data.NewForEachAction = function(arr) {
-                var newArr = [];
-                var take = arr.length - cnt;
-                for (var i = 0; i < take; i++) {
+                let newArr = [];
+                let take = arr.length - cnt;
+                for (let i = 0; i < take; i++) {
                     newArr.push(arr[i]);
                 }
                 return newArr;
@@ -738,21 +744,21 @@ var Enumerable = (function() {
             return new Enumerable(data);
         }
         scope.TakeLast = function(cnt) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                var rtn = [];
-                var idx = arr.length;
-                var took = 0;
-                var willTake = Math.min(cnt, arr.length);
+                let rtn = [];
+                let idx = arr.length;
+                let took = 0;
+                let willTake = Math.min(cnt, arr.length);
                 while (took < cnt || idx > 0) {
                     idx--;
                     took++;
-                    var item = arr[idx];
-                    var rtnIdx = willTake - took;
+                    let item = arr[idx];
+                    let rtnIdx = willTake - took;
                     rtn[rtnIdx] = item;
                 }
                 return rtn;
@@ -760,17 +766,17 @@ var Enumerable = (function() {
             return new Enumerable(data);
         }
         scope.TakeLastWhile = function(pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                var rtn = [];
-                var idx = arr.length;
+                let rtn = [];
+                let idx = arr.length;
                 while (idx > 0) {
                     idx--;
-                    var item = arr[idx];
+                    let item = arr[idx];
                     if (!pred(item)) {
                         break;
                     }
@@ -780,8 +786,8 @@ var Enumerable = (function() {
             }
             return new Enumerable(data);
         }
-        var FirstPredicate = function(pred) {
-            var SCOPE = this;
+        let FirstPredicate = function(pred) {
+            let SCOPE = this;
             this.NULL_PRED_METHOD = function(i, v) {
                 SCOPE._first = v;
                 return false;
@@ -796,7 +802,7 @@ var Enumerable = (function() {
             this._predicate = pred;
             this._first = null;
             this._firstIndex = -1;
-            var that = this;
+            let that = this;
             if (this._predicate == null) {
                 this.Predicate = this.NULL_PRED_METHOD;
             } else {
@@ -804,8 +810,8 @@ var Enumerable = (function() {
             }
             this.Execute = function(SCOPE) {
                 SCOPE.ForEach(this.Predicate);
-                var idx = this._firstIndex;
-                var first = this._first;
+                let idx = this._firstIndex;
+                let first = this._first;
                 return {
                     Index: idx,
                     First: first
@@ -817,24 +823,24 @@ var Enumerable = (function() {
             }
         }
         scope.First = function(pred) {
-            var p = new FirstPredicate(pred);
+            let p = new FirstPredicate(pred);
             return p.Execute(scope).First;
         }
         scope.Single = function(pred) {
             return scope.First(pred);
         }
-        var LastPredicate = function(pred) {
+        let LastPredicate = function(pred) {
             this.Predicate = pred;
             this._last = null;
             this._lastIndex = -1;
             this.Execute = function(SCOPE) {
-                var arr = SCOPE.ToArray();
-                var idx = arr.length - 1;
+                let arr = SCOPE.ToArray();
+                let idx = arr.length - 1;
                 if (this.Predicate == null) {
                     return arr[idx];
                 }
-                while (idx > -1) {
-                    var item = arr[idx];
+                while (idx > -1) { 
+                    let item = arr[idx];
                     if (this.Predicate(item)) {
                         this._last = item;
                         this._lastIndex = idx;
@@ -842,8 +848,8 @@ var Enumerable = (function() {
                     }
                     idx--;
                 }
-                var idx = this._lastIndex;
-                var last = this._last;
+                idx = this._lastIndex;
+                last = this._last;
                 return {
                     Index: idx,
                     Last: last
@@ -855,22 +861,22 @@ var Enumerable = (function() {
             }
         }
         scope.Last = function(pred) {
-            var p = new LastPredicate(pred);
+            let p = new LastPredicate(pred);
             return p.Execute(scope).Last;
         }
         scope.IndexOf = function(item) {
-            var pred = function(x) {
+            let pred = function(x) {
                 return x == item;
             }
-            var p = new FirstPredicate(pred);
+            let p = new FirstPredicate(pred);
             return p.Execute(scope).Index;
         }
         scope.LastIndexOf = function(item) {
-            var arr = scope.ToArray();
+            let arr = scope.ToArray();
             return arr.lastIndexOf(item);
         }
         scope.OrderBy = function(pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack,
@@ -880,7 +886,7 @@ var Enumerable = (function() {
             return new OrderedEnumerable(data);
         }
         scope.OrderByDescending = function(pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack,
@@ -890,13 +896,13 @@ var Enumerable = (function() {
             return new OrderedEnumerable(data);
         }
         scope.Any = function(pred) {
-            var first = scope.First(pred);
+            let first = scope.First(pred);
             return first !== null;
         }
-        var AllPredicate = function(pred) {
+        let AllPredicate = function(pred) {
             this._predicate = pred;
             this._all = true;
-			var scope = this;
+			let scope = this;
             this.Predicate = function(i, v) {
                 if (scope._predicate(v) === false) {
                     scope._all = false;
@@ -915,68 +921,68 @@ var Enumerable = (function() {
             if (pred == null) {
                 return true;
             }
-            var p = new AllPredicate(pred);
+            let p = new AllPredicate(pred);
             return p.Execute(scope);
         }
         scope.Contains = function(item) {
             return scope.IndexOf(item) > -1;
         }
         scope.Except = function(items) {
-			var itemArr = ParseDataAsArray(items);
+			let itemArr = ParseDataAsArray(items);
             return scope.Where(x => itemArr.indexOf(x) == -1);
         }
         scope.Not = function(pred) {
             return scope.Where(x => !pred(x));
         }
-		var UnionPredicate = function(items,pred){
-			var scope = this;
+		let UnionPredicate = function(items,pred){
+			let scope = this;
 			this.Items = items;
 			this.Predicate = pred;
 			this.Reset = function(){}
 			this.Execute = function(arr){
-				var items = ParseDataAsArray(scope.Items);
-				var hash = new HashMap(pred);
-				for(var i = 0; i < arr.length; i++){
-					var item = arr[i];
+				let items = ParseDataAsArray(scope.Items);
+				let hash = new HashMap(pred);
+				for(let i = 0; i < arr.length; i++){
+					let item = arr[i];
 					hash.TryAdd(item);
 				}
-				for(var i = 0; i < items.length; i++){
-					var item = items[i];
+				for(let i = 0; i < items.length; i++){
+					let item = items[i];
 					hash.TryAdd(item);
 				}	
-				var flush = hash.Flush();
+				let flush = hash.Flush();
 				return flush;
 			}
 		}
         scope.Union = function(items, pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-				var p = new UnionPredicate(items,pred);
+				let p = new UnionPredicate(items,pred);
 				return p.Execute(arr);
 			}
 			return new Enumerable(data);
         }
-		var IntersectPredicate = function(items,pred){
-			var scope = this;
+		let IntersectPredicate = function(items,pred){
+			let scope = this;
 			this.Items = items;
 			this.Predicate = pred;
 			this.Reset = function(){}
 			this.Execute = function(arr){
-				var rtn = [];
-				var items = ParseDataAsArray(scope.Items);
-				var hash1 = new HashMap(pred);
-				var hash2 = new HashMap(pred);
-				for(var i = 0; i < arr.length; i++){
-					var item = arr[i];
+				let rtn = [];
+				let items = ParseDataAsArray(scope.Items);
+				let hash1 = new HashMap(pred);
+				let hash2 = new HashMap(pred);
+				for(let i = 0; i < arr.length; i++){
+					let item = arr[i];
 					hash1.TryAdd(item);
 				}
-				for(var i = 0; i < items.length; i++){
-					var item = items[i];
-					var val = hash2.ExtractValue(item);
+				for(let i = 0; i < items.length; i++){
+					let item = items[i];
+					let val = hash2.ExtractValue(item);
 
 					if(hash2.ContainsFromExtractedValue(val)){
 						continue;
@@ -993,40 +999,40 @@ var Enumerable = (function() {
 			}
 		}
         scope.Intersect = function(items, pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-				var p = new IntersectPredicate(items,pred);
+				let p = new IntersectPredicate(items,pred);
 				return p.Execute(arr);
 			}
 			return new Enumerable(data);
         }
-		var DisjointPredicate = function(items,pred){
-			var scope = this;
+		let DisjointPredicate = function(items,pred){
+			let scope = this;
 			this.Items = items;
 			this.Predicate = pred;
 			this.Reset = function(){}
 			this.Execute = function(arr){
-				var items = scope.Items;
-				var pred = scope.Predicate;
-				var itemArr = ParseDataAsArray(items);
-                var rtn = [];
-                var hash = new HashMap(pred);
-                var dqed = new HashMap(pred);
-                for (var i = 0; i < arr.length; i++) {
-                    var item = arr[i];
-					var result = hash.TryAdd(item);
+				let items = scope.Items;
+				let pred = scope.Predicate;
+				let itemArr = ParseDataAsArray(items);
+                let rtn = [];
+                let hash = new HashMap(pred);
+                let dqed = new HashMap(pred);
+                for (let i = 0; i < arr.length; i++) {
+                    let item = arr[i];
+					let result = hash.TryAdd(item);
 					if(result === undefined){
 						continue;
 					}
-					var val = hash.ExtractValue(item);
-					var flagOut = false;
-					for(var j = 0; j < itemArr.length; j++){
-						var jItem = itemArr[j];
-						var jVal = hash.ExtractValue(jItem);
+					let val = hash.ExtractValue(item);
+					let flagOut = false;
+					for(let j = 0; j < itemArr.length; j++){
+						let jItem = itemArr[j];
+						let jVal = hash.ExtractValue(jItem);
 						if(hash.ContainsFromExtractedValue(jVal)){
 							dqed.TryAdd(jItem);
 							flagOut = true;
@@ -1038,9 +1044,9 @@ var Enumerable = (function() {
                     }
                     rtn.push(item);
                 }
-                for (var i = 0; i < itemArr.length; i++) {
-                    var item = itemArr[i];
-					var val = hash.ExtractValue(item);
+                for (let i = 0; i < itemArr.length; i++) {
+                    let item = itemArr[i];
+					let val = hash.ExtractValue(item);
                     if (!hash.ContainsFromExtractedValue(val) && !hash.ContainsFromExtractedValue(val)) {
                         hash.TryAdd(item);
                         rtn.push(item);
@@ -1052,46 +1058,46 @@ var Enumerable = (function() {
 			}			
 		}
         scope.Disjoint = function(items, pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-				var p = new DisjointPredicate(items,pred);
+				let p = new DisjointPredicate(items,pred);
 				return p.Execute(arr);
             }
             return new Enumerable(data);
         }
         scope.Concat = function(items) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-				var itemArr = ParseDataAsArray(items);
-                var rtn = arr.concat(itemArr);
+				let itemArr = ParseDataAsArray(items);
+                let rtn = arr.concat(itemArr);
                 return rtn;
             }
             return new Enumerable(data);
         }
         scope.Zip = function(items, pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                var rtn = [];
-				var itemArr = ParseDataAsArray(items);
-                for (var i = 0; i < arr.length; i++) {
-                    var itemA = arr[i];
+                let rtn = [];
+				let itemArr = ParseDataAsArray(items);
+                for (let i = 0; i < arr.length; i++) {
+                    let itemA = arr[i];
                     if (i >= itemArr.length) {
                         return rtn;
                     }
-                    var itemB = itemArr[i];
-                    var newItem = pred(itemA, itemB);
+                    let itemB = itemArr[i];
+                    let newItem = pred(itemA, itemB);
                     rtn.push(newItem);
                 }
                 return rtn;
@@ -1099,16 +1105,16 @@ var Enumerable = (function() {
             return new Enumerable(data);
         }
         scope.ZipUneven = function(items, pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                var rtn = [];
-				var itemArr = ParseDataAsArray(items);
-                var maxLen = Math.max(arr.length, itemArr.length);
-                for (var i = 0; i < maxLen; i++) {
+                let rtn = [];
+				let itemArr = ParseDataAsArray(items);
+                let maxLen = Math.max(arr.length, itemArr.length);
+                for (let i = 0; i < maxLen; i++) {
                     if (i >= arr.length) {
                         rtn.push(itemArr[i]);
                         continue;
@@ -1117,9 +1123,9 @@ var Enumerable = (function() {
                         rtn.push(arr[i]);
                         continue;
                     }
-                    var itemA = arr[i];
-                    var itemB = itemArr[i];
-                    var newItem = pred(itemA, itemB);
+                    let itemA = arr[i];
+                    let itemB = itemArr[i];
+                    let newItem = pred(itemA, itemB);
                     rtn.push(newItem);
                 }
                 return rtn;
@@ -1127,14 +1133,14 @@ var Enumerable = (function() {
             return new Enumerable(data);
         }
         scope.Reverse = function() {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                var rtn = [];
-                for (var i = arr.length - 1; i > -1; i--) {
+                let rtn = [];
+                for (let i = arr.length - 1; i > -1; i--) {
                     rtn.push(arr[i]);
                 }
                 return rtn;
@@ -1142,7 +1148,7 @@ var Enumerable = (function() {
             return new Enumerable(data);
         }
         scope.GroupBy = function(pred) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
@@ -1151,22 +1157,22 @@ var Enumerable = (function() {
             return new GroupedEnumerable(data);
         }
         scope.Join = function(data, propA, propB, selectObj) {
-            var dataToPass = {
+            let dataToPass = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             dataToPass.NewForEachAction = function(arr) {
-                var data2 = (data.ToArray ? data.ToArray() : data);
-                var rtn = [];
-                for (var i = 0; i < arr.length; i++) {
-                    var item = arr[i];
-                    var a = propA(item);
-                    for (var j = 0; j < data2.length; j++) {
-                        var item2 = data2[j];
-                        var b = propB(item2);
+                let data2 = (data.ToArray ? data.ToArray() : data);
+                let rtn = [];
+                for (let i = 0; i < arr.length; i++) {
+                    let item = arr[i];
+                    let a = propA(item);
+                    for (let j = 0; j < data2.length; j++) {
+                        let item2 = data2[j];
+                        let b = propB(item2);
                         if (a == b) {
-                            var obj = selectObj(item, item2);
+                            let obj = selectObj(item, item2);
                             rtn.push(obj);
                         }
                     }
@@ -1180,10 +1186,10 @@ var Enumerable = (function() {
             return scope.ToArray().length;
         }
         scope.Average = function(pred) {
-            var arr = scope.ToArray();
-            var sum = 0;
-            for (var i = 0; i < arr.length; i++) {
-                var item = arr[i];
+            let arr = scope.ToArray();
+            let sum = 0;
+            for (let i = 0; i < arr.length; i++) {
+                let item = arr[i];
                 if (pred) {
                     sum += pred(item);
                 } else {
@@ -1193,7 +1199,7 @@ var Enumerable = (function() {
             return sum / arr.length;
         }
         scope.Median = function(pred) {
-            var values = [];
+            let values = [];
             if (pred) {
                 values = scope.Select(pred).ToArray();
             } else {
@@ -1202,7 +1208,7 @@ var Enumerable = (function() {
             values.sort(function(a, b) {
                 return a - b;
             });
-            var half = Math.floor(values.length / 2);
+            let half = Math.floor(values.length / 2);
             if (values.length % 2) {
                 return values[half];
             } else {
@@ -1210,7 +1216,7 @@ var Enumerable = (function() {
             }
         }
         scope.Mode = function(pred, level) {
-            var groups = [];
+            let groups = [];
             level = level || 0;
             if (pred) {
                 groups = scope.GroupBy(v => pred(v));
@@ -1220,10 +1226,10 @@ var Enumerable = (function() {
             return groups.MaxBy(g => g.Items.length, level);
         }
         scope.Sum = function(pred) {
-            var arr = scope.ToArray();
-            var sum = 0;
-            for (var i = 0; i < arr.length; i++) {
-                var item = arr[i];
+            let arr = scope.ToArray();
+            let sum = 0;
+            for (let i = 0; i < arr.length; i++) {
+                let item = arr[i];
                 if (pred) {
                     sum += pred(item);
                 } else {
@@ -1232,15 +1238,15 @@ var Enumerable = (function() {
             }
             return sum;
         }
-        var MaxPredicate = function(pred, level) {
+        let MaxPredicate = function(pred, level) {
             this.Level = level || 0;
             this.Predicate = pred;
             this.MaxFirst = function(SCOPE) {
-                var max = Number.NEGATIVE_INFINITY;
-                var arr = SCOPE.ToArray();
-                var pred = this.Predicate;
-                for (var i = 0; i < arr.length; i++) {
-                    var item = arr[i];
+                let max = Number.NEGATIVE_INFINITY;
+                let arr = SCOPE.ToArray();
+                let pred = this.Predicate;
+                for (let i = 0; i < arr.length; i++) {
+                    let item = arr[i];
                     if (this.Predicate) {
                         item = this.Predicate(item);
                     }
@@ -1251,13 +1257,13 @@ var Enumerable = (function() {
                 return max;
             }
             this.Max_N = function(SCOPE) {
-                var arr = SCOPE.ToArray();
-                var level = this.Level;
+                let arr = SCOPE.ToArray();
+                let level = this.Level;
                 if (this.Predicate) {
-                    var pred = this.Predicate;
+                    let pred = this.Predicate;
                     arr.sort(function(a, b) {
-                        var aa = pred(a);
-                        var bb = pred(b);
+                        let aa = pred(a);
+                        let bb = pred(b);
                         if (aa < bb) {
                             return 1;
                         }
@@ -1269,13 +1275,13 @@ var Enumerable = (function() {
                 } else {
                     arr.sort(Enumerable.Functions.SortDesc);
                 }
-                var max = arr[0];
+                let max = arr[0];
                 if (this.Predicate) {
                     max = this.Predicate(max);
                 }
-                var lastMax = max;
-                for (var i = 1; i < arr.length; i++) {
-                    var item = arr[i];
+                let lastMax = max;
+                for (let i = 1; i < arr.length; i++) {
+                    let item = arr[i];
                     if (this.Predicate) {
                         item = this.Predicate(item);
                     }
@@ -1299,16 +1305,16 @@ var Enumerable = (function() {
                 return this.Max_N(SCOPE);
             }
             this.MaxByFirst = function(SCOPE) {
-                var max = this.Max(SCOPE);
-                var pred = this.Predicate;
+                let max = this.Max(SCOPE);
+                let pred = this.Predicate;
                 if (this.Predicate) {
                     return SCOPE.Where(x => pred(x) == max);
                 }
                 return SCOPE.Where(x => x == max);
             }
             this.MaxBy_N = function(SCOPE) {
-                var max = this.Max_N(SCOPE);
-                var pred = this.Predicate;
+                let max = this.Max_N(SCOPE);
+                let pred = this.Predicate;
                 if (this.Predicate) {
                     return SCOPE.Where(x => pred(x) == max);
                 }
@@ -1322,22 +1328,22 @@ var Enumerable = (function() {
             }
         }
         scope.Max = function(pred, level) {
-            var maxPred = new MaxPredicate(pred, level);
+            let maxPred = new MaxPredicate(pred, level);
             return maxPred.Max(scope);
         }
         scope.MaxBy = function(pred, level) {
-            var maxPred = new MaxPredicate(pred, level);
+            let maxPred = new MaxPredicate(pred, level);
             return maxPred.MaxBy(scope);
         }
-        var MinPredicate = function(pred, level) {
+        let MinPredicate = function(pred, level) {
             this.Level = level || 0;
             this.Predicate = pred;
             this.MinFirst = function(SCOPE) {
-                var min = Number.POSITIVE_INFINITY;
-                var arr = SCOPE.ToArray();
-                var pred = this.Predicate;
-                for (var i = 0; i < arr.length; i++) {
-                    var item = arr[i];
+                let min = Number.POSITIVE_INFINITY;
+                let arr = SCOPE.ToArray();
+                let pred = this.Predicate;
+                for (let i = 0; i < arr.length; i++) {
+                    let item = arr[i];
                     if (this.Predicate) {
                         item = this.Predicate(item);
                     }
@@ -1348,13 +1354,13 @@ var Enumerable = (function() {
                 return min;
             }
             this.Min_N = function(SCOPE) {
-                var arr = SCOPE.ToArray();
-                var level = this.Level;
+                let arr = SCOPE.ToArray();
+                let level = this.Level;
                 if (this.Predicate) {
-                    var pred = this.Predicate;
+                    let pred = this.Predicate;
                     arr.sort(function(a, b) {
-                        var aa = pred(a);
-                        var bb = pred(b);
+                        let aa = pred(a);
+                        let bb = pred(b);
                         if (aa < bb) {
                             return -1;
                         }
@@ -1369,9 +1375,9 @@ var Enumerable = (function() {
                 if (this.Predicate) {
                     min = this.Predicate(min);
                 }
-                var lastMin = min;
-                for (var i = 1; i < arr.length; i++) {
-                    var item = arr[i];
+                let lastMin = min;
+                for (let i = 1; i < arr.length; i++) {
+                    let item = arr[i];
                     if (this.Predicate) {
                         item = this.Predicate(item);
                     }
@@ -1395,16 +1401,16 @@ var Enumerable = (function() {
                 return this.Min_N(SCOPE);
             }
             this.MinByFirst = function(SCOPE) {
-                var min = this.Min(SCOPE);
-                var pred = this.Predicate;
+                let min = this.Min(SCOPE);
+                let pred = this.Predicate;
                 if (this.Predicate) {
                     return SCOPE.Where(x => pred(x) == min);
                 }
                 return SCOPE.Where(x => x == min);
             }
             this.MinBy_N = function(SCOPE) {
-                var min = this.Min_N(SCOPE);
-                var pred = this.Predicate;
+                let min = this.Min_N(SCOPE);
+                let pred = this.Predicate;
                 if (this.Predicate) {
                     return SCOPE.Where(x => pred(x) == min);
                 }
@@ -1418,23 +1424,23 @@ var Enumerable = (function() {
             }
         }
         scope.Min = function(pred, level) {
-            var minPred = new MinPredicate(pred, level);
+            let minPred = new MinPredicate(pred, level);
             return minPred.Min(scope);
         }
         scope.MinBy = function(pred, level) {
-            var minPred = new MinPredicate(pred, level);
+            let minPred = new MinPredicate(pred, level);
             return minPred.MinBy(scope);
         }
         scope.Aggregate = function(pred, seed) {
-            var curr = seed || null;
-            var arr = scope.ToArray();
-            for (var i = 0; i < arr.length; i++) {
-                var item = arr[i];
+            let curr = seed || null;
+            let arr = scope.ToArray();
+            for (let i = 0; i < arr.length; i++) {
+                let item = arr[i];
                 if (curr == null) {
                     curr = item;
                     continue;
                 }
-                var val = item;
+                let val = item;
                 curr = pred(curr, val);
             }
             return curr;
@@ -1449,16 +1455,16 @@ var Enumerable = (function() {
             return scope.InsertRange(idx, [data]);
         }
         scope.InsertRange = function(idx, data) {
-            var dataToPass = {
+            let dataToPass = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             dataToPass.NewForEachAction = function(arr) {
-                var rtn = [];
-                for (var i = 0; i < arr.length; i++) {
+                let rtn = [];
+                for (let i = 0; i < arr.length; i++) {
                     if (i == idx) {
-                        for (var j = 0; j < data.length; j++) {
+                        for (let j = 0; j < data.length; j++) {
                             rtn.push(data[j]);
                         }
                     }
@@ -1469,15 +1475,15 @@ var Enumerable = (function() {
             return new Enumerable(dataToPass);
         }
         scope.Choice = function(cnt) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                var rtn = [];
-                for (var i = 0; i < cnt; i++) {
-                    var idx = Math.floor(arr.length * Math.random());
+                let rtn = [];
+                for (let i = 0; i < cnt; i++) {
+                    let idx = Math.floor(arr.length * Math.random());
                     rtn.push(arr[idx]);
                 }
                 return rtn;
@@ -1485,15 +1491,15 @@ var Enumerable = (function() {
             return new Enumerable(data);
         }
         scope.Cycle = function(cnt) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                var rtn = [];
-                for (var i = 0; i < cnt; i++) {
-                    var idx = i % arr.length;
+                let rtn = [];
+                for (let i = 0; i < cnt; i++) {
+                    let idx = i % arr.length;
                     rtn.push(arr[idx]);
                 }
                 return rtn;
@@ -1501,14 +1507,14 @@ var Enumerable = (function() {
             return new Enumerable(data);
         }
         scope.Repeat = function(elm, cnt) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                var rtn = arr.slice();
-                for (var i = 0; i < cnt; i++) {
+                let rtn = arr.slice();
+                for (let i = 0; i < cnt; i++) {
                     rtn.push(elm);
                 }
                 return rtn;
@@ -1516,7 +1522,7 @@ var Enumerable = (function() {
             return new Enumerable(data);
         }
         scope.ElementAt = function(idx) {
-            var arr = scope.ToArray();
+            let arr = scope.ToArray();
             return arr[idx];
         }
         scope.Push = function(elm) {
@@ -1529,21 +1535,21 @@ var Enumerable = (function() {
             return scope.OrderBy(Enumerable.Functions.ShuffleSort);
         }
         scope.Sequence = function(cnt, generator) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                var rtn = arr.slice();
-                for (var i = 0; i < cnt; i++) {
+                let rtn = arr.slice();
+                for (let i = 0; i < cnt; i++) {
                     rtn.push(generator(i));
                 }
                 return rtn;
             }
             return new Enumerable(data);
         }
-        var CatchPredicate = function(handler, refPred) {
+        let CatchPredicate = function(handler, refPred) {
             this.Handler = handler;
             this.HandledPredicate = refPred;
             this.Predicate = function(item) {
@@ -1560,16 +1566,16 @@ var Enumerable = (function() {
             }
         }
         scope.Catch = function(handler) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates.slice(),
                 ForEachActionStack: scope.ForEachActionStack
             };
-            var oldPredicate = data.Predicates.pop();
+            let oldPredicate = data.Predicates.pop();
             data.NewPredicate = new CatchPredicate(handler, oldPredicate);
             return new Enumerable(data);
         }
-        var TracePredicate = function(msg) {
+        let TracePredicate = function(msg) {
             this.Message = msg;
             this.Predicate = function(item) {
                 console.log(this.Message, ":", item);
@@ -1581,12 +1587,12 @@ var Enumerable = (function() {
             this.Reset = function() {}
         }
         scope.Trace = function(msg) {
-            var data = {
+            let data = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
-            var oldPredicate = data.Predicate;
+            let oldPredicate = data.Predicate;
             data.NewPredicate = new TracePredicate();
             return new Enumerable(data);
         }
@@ -1604,7 +1610,7 @@ var Enumerable = (function() {
             return scope.Write("\r\n", pred);
         }
         scope.Clone = function() {
-            var privData = {
+            let privData = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
@@ -1619,30 +1625,30 @@ var Enumerable = (function() {
     }
     // The preferred smart constructor
     PublicEnumerable.From = function(data) {
-			var d = ParseDataAsArray(data);
+			let d = ParseDataAsArray(data);
             return new PublicEnumerable(d);
         }
         // Public Static Methods
     PublicEnumerable.Range = function(start, count, step) {
-        var arr = [];
+        let arr = [];
         step = step || 1;
-        var curr = start;
-        for (var i = 0; i < count; i++) {
+        let curr = start;
+        for (let i = 0; i < count; i++) {
             arr.push(curr);
             curr += step;
         }
         return PublicEnumerable.From(arr);
     }
     PublicEnumerable.RangeTo = function(start, to, step) {
-        var arr = [];
+        let arr = [];
         step = step || 1;
-        var sign = 1;
+        let sign = 1;
         if (to < start) {
             sign = -1;
             start *= -1;
             to *= -1;
         }
-        for (var i = start; i <= to; i += step) {
+        for (let i = start; i <= to; i += step) {
             arr.push(i * sign);
         }
         return PublicEnumerable.From(arr);
@@ -1679,21 +1685,21 @@ var Enumerable = (function() {
     Enumerable.CreateSortFunction = function(pred, desc) {
         if (desc) {
             return function(a, b) {
-                var aa = pred(a);
-                var bb = pred(b);
+                let aa = pred(a);
+                let bb = pred(b);
                 return Enumerable.Functions.SortDesc(aa, bb);
             }
         }
         return function(a, b) {
-            var aa = pred(a);
-            var bb = pred(b);
+            let aa = pred(a);
+            let bb = pred(b);
             return Enumerable.Functions.SortAsc(aa, bb);
         }
     }
     Enumerable.CreateCompositeSortFunction = function(oldComparer, pred, desc) {
-        var newSort = Enumerable.CreateSortFunction(pred, desc);
+        let newSort = Enumerable.CreateSortFunction(pred, desc);
         return function(a, b) {
-            var initialResult = oldComparer(a, b);
+            let initialResult = oldComparer(a, b);
             if (initialResult !== 0) {
                 return initialResult;
             }
@@ -1701,7 +1707,7 @@ var Enumerable = (function() {
         } 
     }
     // Create a short-hand, plus NoConflict
-    var _Old = window._;
+    let _Old = window._;
     window._ = PublicEnumerable;
     PublicEnumerable.NoConflict = function() {
 		if(window._ !== PublicEnumerable){

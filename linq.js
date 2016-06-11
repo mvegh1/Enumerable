@@ -113,6 +113,17 @@ let Enumerable = (function() {
 			let val = this.ExtractValue(obj);
 			return this.ContainsFromExtractedValue(val);
 		}
+		function GetHashKeyFromObj(obj){
+			let val = scope.ExtractValue(obj);
+			return GetHashKeyFromVal(val);
+		}
+		function GetHashKeyFromVal(val){
+			if( typeof val === "object" ){
+				return val[scope.PROPERTY_FOR_HASHING];				
+			} else {
+				return val;
+			}		
+		}
 		this.ContainsFromExtractedValue = function(val){
 			if( typeof val === "object" ){
 				let id = val[scope.PROPERTY_FOR_HASHING];				
@@ -150,6 +161,14 @@ let Enumerable = (function() {
 				}
 			}
 			return undefined;
+		}
+		this.GetHashKeyOrInsertNew = function(obj){
+			let key = GetHashKeyFromObj(obj);
+			if(key !== undefined){
+				return key;
+			}
+			let val = this.TryAdd(obj);
+			return GetHashKeyFromVal(val);
 		}
 		
 		// Flushes the hash and outputs as array
@@ -296,6 +315,7 @@ let Enumerable = (function() {
 			if(arr.length === 0){
 				return arr;
 			}
+			let objHashing = new HashMap();
             let groups = [];
             let groupsIdx = [];
 			let firstItem = this.GroupingPredicates(arr[0]);
@@ -305,12 +325,10 @@ let Enumerable = (function() {
 				let key = "";
 				let groupKey = this.GroupingPredicates(item);
 				for(let j = 0; j < groupingKeys.length; j++){
-					let propertyKey = groupingKeys[j];
 					if(key.length > 0){
 						key += ",";
 					}
-					let keyVal = groupKey[propertyKey];
-					key += keyVal;
+					key += objHashing.GetHashKeyOrInsertNew(groupKey[groupingKeys[j]]);
 				}
                 if (groupsIdx[key] === undefined) {
                     groupsIdx[key] = groups.length;
@@ -320,6 +338,7 @@ let Enumerable = (function() {
                 groups[idx].Items.push(item);
             }
             arr = groups;
+			objHashing.Clear();
             return arr;			
 		}
         this.AddToForEachStack(function(arr) {
@@ -1169,12 +1188,154 @@ let Enumerable = (function() {
                     for (let j = 0; j < data2.length; j++) {
                         let item2 = data2[j];
                         let b = propB(item2);
-                        if (a == b) {
+                        if (a === b) {
                             let obj = selectObj(item, item2);
                             rtn.push(obj);
                         }
                     }
                 }
+                arr = rtn;
+                return arr;
+            }
+            return new Enumerable(dataToPass);
+        }
+		scope.LeftJoin = function(data, propA, propB, selectObj,leftObj) {
+            let dataToPass = {
+                Data: scope.Data,
+                Predicates: scope.Predicates,
+                ForEachActionStack: scope.ForEachActionStack
+            };
+            dataToPass.NewForEachAction = function(arr) {
+                let data2 = (data.ToArray ? data.ToArray() : data);
+                let rtn = [];
+				let left = [];
+                for (let i = 0; i < arr.length; i++) {
+                    let item = arr[i];
+					let found = false;
+                    let a = propA(item);
+                    for (let j = 0; j < data2.length; j++) {
+                        let item2 = data2[j];
+                        let b = propB(item2);
+                        if (a === b) {
+                            let obj = selectObj(item, item2);
+                            rtn.push(obj);
+							found = true;
+							continue;
+                        }
+                    }
+					if(found === false){
+						left.push(item);
+					}
+                }
+				//Left Join
+				for(let i = 0; i < left.length; i++){
+					let item = left[i];
+					let obj = leftObj(item);
+					rtn.push(obj);
+				}
+                arr = rtn;
+                return arr;
+            }
+            return new Enumerable(dataToPass);
+        }
+		scope.RightJoin = function(data, propA, propB, selectObj,rightObj) {
+            let dataToPass = {
+                Data: scope.Data,
+                Predicates: scope.Predicates,
+                ForEachActionStack: scope.ForEachActionStack
+            };
+            dataToPass.NewForEachAction = function(arr) {
+                let data2 = (data.ToArray ? data.ToArray() : data);
+                let rtn = [];
+				let right = [];
+                for (let i = 0; i < data2.length; i++) {
+                    let item2 = data2[i];
+					let found = false;
+                    let b = propB(item2);
+                    for (let j = 0; j < arr.length; j++) {
+                        let item = arr[j];
+                        let a = propA(item);
+                        if (a === b) {
+                            let obj = selectObj(item, item2);
+                            rtn.push(obj);
+							found = true;
+							continue;
+                        }
+                    }
+					if(found === false){
+						right.push(item);
+					}
+                }
+				//Right Join
+				for(let i = 0; i < right.length; i++){
+					let item = right[i];
+					let obj = rightObj(item);
+					rtn.push(obj);
+				}
+                arr = rtn;
+                return arr;
+            }
+            return new Enumerable(dataToPass);
+        }
+		scope.FullJoin = function(data, propA, propB, selectObj,leftObj,rightObj) {
+            let dataToPass = {
+                Data: scope.Data,
+                Predicates: scope.Predicates,
+                ForEachActionStack: scope.ForEachActionStack
+            };
+            dataToPass.NewForEachAction = function(arr) {
+                let data2 = (data.ToArray ? data.ToArray() : data);
+				let left = [];
+				let right = [];
+				
+				// First, process the matches
+                let rtn = [];
+                for (let i = 0; i < arr.length; i++) {
+                    let item = arr[i];
+                    let a = propA(item);
+					let found = false;
+                    for (let j = 0; j < data2.length; j++) {
+                        let item2 = data2[j];
+                        let b = propB(item2);
+                        if (a == b) {
+                            let obj = selectObj(item, item2);
+                            rtn.push(obj);
+							found = true;
+							continue;
+                        }
+                    }
+					if(found === false){
+						left.push(item);
+					}
+                }
+                for (let i = 0; i < data2.length; i++) {
+                    let item2 = data2[i];
+					let found = false;
+                    let b = propB(item2);
+                    for (let j = 0; j < arr.length; j++) {
+                        let item = arr[j];
+                        let a = propA(item);
+                        if (a === b) {
+							found = true;
+							break;
+                        }
+                    }
+					if(found === false){
+						right.push(item);
+					}
+                }
+				//Left Join
+				for(let i = 0; i < left.length; i++){
+					let item = left[i];
+					let obj = leftObj(item);
+					rtn.push(obj);
+				}
+				//Right Join
+				for(let i = 0; i < right.length; i++){
+					let item = right[i];
+					let obj = rightObj(item);
+					rtn.push(obj);
+				}
                 arr = rtn;
                 return arr;
             }

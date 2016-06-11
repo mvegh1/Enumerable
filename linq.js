@@ -274,9 +274,12 @@ let Enumerable = (function() {
 		};
 	}
 
-
+	function GroupKeyMeta(property, predicate){
+		this.Property = property;
+		this.Predicate = predicate;
+	}
     function GroupedEnumerable(privateData) {
-        let scope = this;
+        const scope = this;
         let argsToApply = [{
             Data: privateData.Data,
             ForEachActionStack: privateData.ForEachActionStack,
@@ -286,47 +289,42 @@ let Enumerable = (function() {
         Enumerable.apply(this, argsToApply);
         // Private variables for module
         let pred = privateData.GroupingPredicate;
-        this.AddToForEachStack(function(arr) {
+		this.GroupingPredicates = pred;
+		
+
+		this.GroupingFunc = function(arr){
+			if(arr.length === 0){
+				return arr;
+			}
             let groups = [];
             let groupsIdx = [];
+			let firstItem = this.GroupingPredicates(arr[0]);
+			let groupingKeys = Object.keys(firstItem);
             for (let i = 0; i < arr.length; i++) {
                 let item = arr[i];
-                let key = pred(item);
-                if (groupsIdx[key] == undefined) {
+				let key = "";
+				let groupKey = this.GroupingPredicates(item);
+				for(let j = 0; j < groupingKeys.length; j++){
+					let propertyKey = groupingKeys[j];
+					if(key.length > 0){
+						key += ",";
+					}
+					let keyVal = groupKey[propertyKey];
+					key += keyVal;
+				}
+                if (groupsIdx[key] === undefined) {
                     groupsIdx[key] = groups.length;
-                    groups.push(new Group(key));
+                    groups.push(new Group(groupKey));
                 }
                 let idx = groupsIdx[key];
                 groups[idx].Items.push(item);
             }
             arr = groups;
-            return arr;
+            return arr;			
+		}
+        this.AddToForEachStack(function(arr) {
+			return scope.GroupingFunc(arr);
         });
-        this.ThenBy = function(pred) {
-            this.AddToForEachStack(function(arr) {
-                let groups = [];
-                for (let i = 0; i < arr.length; i++) {
-                    let groups2 = [];
-                    let groupsIdx2 = [];
-                    let group = arr[i];
-                    for (let j = 0; j < group.Items.length; j++) {
-                        let item = group.Items[j];
-                        let key = pred(item);
-                        if (groupsIdx2[key] == undefined) {
-                            groupsIdx2[key] = groups2.length;
-                            groups2.push(new Group(key));
-                        }
-                        let idx = groupsIdx2[key];
-                        groups2[idx].Items.push(item);
-                    }
-                    group.Items = groups2;
-                    groups.push(group);
-                }
-                arr = groups;
-                return arr;
-            });
-            return this;
-        }
     };
     function FilteredEnumerable(privateData) {
         let scope = this;

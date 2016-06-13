@@ -318,7 +318,7 @@ let Enumerable = (function() {
         let pred = privateData.GroupingPredicate;
         this.GroupingPredicates = pred;
 
-
+		this.HavingFunc = function(arr){return arr;}
         this.GroupingFunc = function(arr) {
             if (arr.length === 0) {
                 return arr;
@@ -347,11 +347,29 @@ let Enumerable = (function() {
             }
             arr = groups;
             objHashing.Clear();
-            return arr;
+            arr = scope.HavingFunc(arr);
+			return arr;
         }
         this.AddToForEachStack(function(arr) {
             return scope.GroupingFunc(arr);
         });
+		this.Having = function(pred){
+			let oldHaving = scope.HavingFunc;
+			scope.HavingFunc = function(arr){
+				arr = oldHaving(arr);
+				let newArr = [];
+				for(let i = 0; i < arr.length; i++){
+					let group = arr[i];
+					let items = group.Items;
+					let itemsEnum = ParseDataAsEnumerable(items);
+					if(pred(itemsEnum)){
+						newArr.push(group);
+					}
+				}
+				return newArr;
+			}
+			return this;
+		}
     };
 
     function FilteredEnumerable(privateData) {

@@ -8,7 +8,7 @@ let Enumerable = (function() {
     // Private Classes for module
     function Group(key) {
         this.Key = key;
-        this.Items = [];
+        this.Items = ParseDataAsEnumerable([]);
     }
     // the module API
     function PublicEnumerable(data) {
@@ -343,7 +343,7 @@ let Enumerable = (function() {
                     groups.push(new Group(groupKey));
                 }
                 let idx = groupsIdx[key];
-                groups[idx].Items.push(item);
+                groups[idx].Items.Data.push(item);
             }
             arr = groups;
             objHashing.Clear();
@@ -361,8 +361,7 @@ let Enumerable = (function() {
 				for(let i = 0; i < arr.length; i++){
 					let group = arr[i];
 					let items = group.Items;
-					let itemsEnum = ParseDataAsEnumerable(items);
-					if(pred(itemsEnum)){
+					if(pred(items)){ 
 						newArr.push(group);
 					}
 				}
@@ -1415,7 +1414,10 @@ let Enumerable = (function() {
             }
             return new Enumerable(dataToPass);
         }
-        scope.Count = function() {
+        scope.Count = function(pred) {
+			if(pred !== undefined){
+				return scope.Where(x=>pred(x)).ToArray().length;
+			}
             return scope.ToArray().length;
         }
         scope.Average = function(pred) {

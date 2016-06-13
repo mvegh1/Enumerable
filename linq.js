@@ -316,9 +316,9 @@ let Enumerable = (function() {
         Enumerable.apply(this, argsToApply);
         // Private variables for module
         let pred = privateData.GroupingPredicate;
-        this.GroupingPredicates = pred;
+        let GroupingPredicates = pred;
 
-		this.HavingFunc = function(arr){return arr;}
+		let HavingFunc = function(arr){return arr;}
         this.GroupingFunc = function(arr) {
             if (arr.length === 0) {
                 return arr;
@@ -326,12 +326,12 @@ let Enumerable = (function() {
             let objHashing = new HashMap();
             let groups = [];
             let groupsIdx = [];
-            let firstItem = this.GroupingPredicates(arr[0]);
+            let firstItem = GroupingPredicates(arr[0]);
             let groupingKeys = Object.keys(firstItem);
             for (let i = 0; i < arr.length; i++) {
                 let item = arr[i];
                 let key = "";
-                let groupKey = this.GroupingPredicates(item);
+                let groupKey = GroupingPredicates(item);
                 for (let j = 0; j < groupingKeys.length; j++) {
                     if (key.length > 0) {
                         key += ",";
@@ -347,7 +347,7 @@ let Enumerable = (function() {
             }
             arr = groups;
             objHashing.Clear();
-            arr = scope.HavingFunc(arr);
+            arr = HavingFunc(arr);
 			return arr;
         }
         this.AddToForEachStack(function(arr) {

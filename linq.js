@@ -1,3 +1,4 @@
+
 'use strict';
 let Enumerable = (function() {
     // Private constant variables for module
@@ -103,10 +104,9 @@ let Enumerable = (function() {
     }
 
     function HashMap(pred) {
-        this.Hash = {};
+        this.Hash = new Map();
         this.Array = [];
         this.Predicate = pred;
-        this.PROPERTY_FOR_HASHING = "HASH_CHECK_" + CreateGuid();
         let scope = this;
         this.ExtractValue = function(obj) {
             if (scope.Predicate) {
@@ -116,66 +116,28 @@ let Enumerable = (function() {
         }
         this.ContainsItem = function(obj) {
             let val = this.ExtractValue(obj);
-            return this.ContainsFromExtractedValue(val);
-        }
-
-        function GetHashKeyFromObj(obj) {
-            let val = scope.ExtractValue(obj);
-            return GetHashKeyFromVal(val);
-        }
-
-        function GetHashKeyFromVal(val) {
-            if (typeof val === "object") {
-                return val[scope.PROPERTY_FOR_HASHING];
-            } else {
-                return val;
-            }
+            return this.Hash.has(val);
         }
         this.ContainsFromExtractedValue = function(val) {
-            if (typeof val === "object") {
-                let id = val[scope.PROPERTY_FOR_HASHING];
-                if (id === undefined) {
-                    return false;
-                }
-                if (this.Hash[id] === undefined) {
-                    return false;
-                }
-                return true;
-            } else {
-                if (scope.Hash[val] === undefined) {
-                    return false;
-                }
-                return true;
-            }
+            return this.Hash.has(val);
         }
         this.TryAdd = function(obj) {
-            let val = scope.ExtractValue(obj);
-            if (typeof val === "object") {
-                let id = val[scope.PROPERTY_FOR_HASHING];
-                //If the id is undefined, that means the object was never added
-                if (id === undefined) {
-                    id = CreateGuid();
-                    val[scope.PROPERTY_FOR_HASHING] = id;
-                    scope.Hash[id] = obj;
-                    scope.Array.push(obj);
-                    return val;
-                }
-            } else {
-                if (scope.Hash[val] === undefined) {
-                    scope.Hash[val] = obj;
-                    scope.Array.push(obj);
-                    return val;
-                }
-            }
-            return undefined;
+            let val  = this.ExtractValue(obj);
+			if(this.Hash.has(val)){
+				return undefined;
+			}
+			this.Hash.set(val,obj);
+			this.Array.push(obj);
+			return val;
         }
         this.GetHashKeyOrInsertNew = function(obj) {
-            let key = GetHashKeyFromObj(obj);
-            if (key !== undefined) {
-                return key;
-            }
-            let val = this.TryAdd(obj);
-            return GetHashKeyFromVal(val);
+            let val  = this.ExtractValue(obj);
+			if(this.Hash.has(val)){
+				return val;
+			}
+			this.Hash.set(val,obj);
+			this.Array.push(obj);
+			return val;
         }
 
         // Flushes the hash and outputs as array
@@ -186,14 +148,7 @@ let Enumerable = (function() {
         }
 
         this.Clear = function() {
-            let hash = scope.Hash;
-            let keys = Object.keys(hash);
-            for (let i = 0; i < keys.length; i++) {
-                let key = keys[i];
-                let item = hash[key];
-                delete item[scope.PROPERTY_FOR_HASHING];
-            }
-            scope.Hash = {};
+            scope.Hash.clear();
             scope.Array = [];
         }
 
@@ -319,7 +274,7 @@ let Enumerable = (function() {
         let GroupingPredicates = pred;
 
 		let HavingFunc = function(arr){return arr;}
-        this.GroupingFunc = function(arr) {
+        let GroupingFunc = function(arr) {
             if (arr.length === 0) {
                 return arr;
             }
@@ -351,11 +306,11 @@ let Enumerable = (function() {
 			return arr;
         }
         this.AddToForEachStack(function(arr) {
-            return scope.GroupingFunc(arr);
+            return GroupingFunc(arr);
         });
 		this.Having = function(pred){
-			let oldHaving = scope.HavingFunc;
-			scope.HavingFunc = function(arr){
+			let oldHaving = HavingFunc;
+			HavingFunc = function(arr){
 				arr = oldHaving(arr);
 				let newArr = [];
 				for(let i = 0; i < arr.length; i++){

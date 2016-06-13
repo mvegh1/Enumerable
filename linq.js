@@ -1,4 +1,3 @@
-
 'use strict';
 let Enumerable = (function() {
     // Private constant variables for module
@@ -261,8 +260,8 @@ let Enumerable = (function() {
     }
 
     function GroupedEnumerable(privateData) {
-        const scope = this;
-        let argsToApply = [{
+        let scope = this;
+        const argsToApply = [{
             Data: privateData.Data,
             ForEachActionStack: privateData.ForEachActionStack,
             Predicates: privateData.Predicates,
@@ -270,40 +269,45 @@ let Enumerable = (function() {
         }];
         Enumerable.apply(this, argsToApply);
         // Private variables for module
-        let pred = privateData.GroupingPredicate;
-        let GroupingPredicates = pred;
+        let GroupingPredicates = privateData.GroupingPredicate;
 
 		let HavingFunc = function(arr){return arr;}
+		
+		function MakeKey(objHashing,groupKey,groupingKeys){
+			const comma = ",";
+			let key = "";
+			for (let j = 0; j < groupingKeys.length; j++) {
+				key = key + objHashing.GetHashKeyOrInsertNew(groupKey[groupingKeys[j]]) + comma;
+			}
+			return key;
+		}
         let GroupingFunc = function(arr) {
             if (arr.length === 0) {
                 return arr;
             }
-            let objHashing = new HashMap();
-            let groups = [];
-            let groupsIdx = [];
-            let firstItem = GroupingPredicates(arr[0]);
-            let groupingKeys = Object.keys(firstItem);
-            for (let i = 0; i < arr.length; i++) {
-                let item = arr[i];
-                let key = "";
-                let groupKey = GroupingPredicates(item);
-                for (let j = 0; j < groupingKeys.length; j++) {
-                    if (key.length > 0) {
-                        key += ",";
-                    }
-                    key += objHashing.GetHashKeyOrInsertNew(groupKey[groupingKeys[j]]);
-                }
-                if (groupsIdx[key] === undefined) {
-                    groupsIdx[key] = groups.length;
-                    groups.push(new Group(groupKey));
-                }
-                let idx = groupsIdx[key];
-                groups[idx].Items.Data.push(item);
+			const objHashing = new HashMap();
+            const groups = [];
+            const groupsIdx = new Map();
+            const firstItem = GroupingPredicates(arr[0]);
+            const groupingKeys = Object.keys(firstItem);
+			const len = arr.length;
+			
+            for (let i = 0; i < len; i++) {
+                const item = arr[i];
+                const groupKey = GroupingPredicates(item);
+				const key = MakeKey(objHashing,groupKey,groupingKeys);
+                if (groupsIdx.has(key) === false) {
+                    groupsIdx.set(key,groups.length);
+					let group = new Group(groupKey);
+					group.Items.Data.push(item);
+                    groups.push(group);
+                } else {
+					let idx = groupsIdx.get(key);
+					let group = groups[idx];
+					group.Items.Data.push(item);
+				}
             }
-            arr = groups;
-            objHashing.Clear();
-            arr = HavingFunc(arr);
-			return arr;
+            return HavingFunc(groups);
         }
         this.AddToForEachStack(function(arr) {
             return GroupingFunc(arr);
@@ -316,7 +320,7 @@ let Enumerable = (function() {
 				for(let i = 0; i < arr.length; i++){
 					let group = arr[i];
 					let items = group.Items;
-					if(pred(items)){ 
+					if(pred(items) === true){ 
 						newArr.push(group);
 					}
 				}
@@ -1825,7 +1829,7 @@ let Enumerable = (function() {
         let curr = start;
         for (let i = 0; i < count; i++) {
             arr.push(curr);
-            curr += step;
+            curr = curr + step;
         }
         return PublicEnumerable.From(arr);
     }

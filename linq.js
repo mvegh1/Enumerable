@@ -5,19 +5,20 @@ let Enumerable = (function() {
         return arr;
     };
     let InvalidItem;
+	
     // Private Classes for module
     function GroupInternal(key) {
         this.Key = key;
         this.Items = [];
-        this.AddItem = function(item) {
-            this.Items.push(item);
-        }
+		this.AddItem = function(item){
+			this.Items.push(item);
+		}
+		
     }
-
-    function Group(key, data) {
-        this.Key = key;
-        this.Items = ParseDataAsEnumerable(data);
-    }
+	function Group(key,data){
+		this.Key = key;
+		this.Items = ParseDataAsEnumerable(data);
+	}
     // the module API
     function PublicEnumerable(data) {
         let d = ParseDataAsArray(data);
@@ -45,9 +46,11 @@ let Enumerable = (function() {
         if (data.ToArray) {
             return data;
         }
-        return new Enumerable({
-            Data: Array.from(data)
-        });
+
+		return new Enumerable({
+			Data: Array.from(data)
+		});
+
     }
 
     function ResetPredicates(Predicates) {
@@ -59,10 +62,12 @@ let Enumerable = (function() {
 
     function ProcessPredicatesNoReturn(Predicates, data, terminatingCondition) {
         ResetPredicates(Predicates);
+
         // No action was specified
         if (!terminatingCondition) {
             return;
         }
+
         let idx = -1;
         for (let len = data.length, i = 0; i !== len; i++) {
             let item = data[i];
@@ -80,6 +85,7 @@ let Enumerable = (function() {
             if (terminatingCondition(idx, item) === false) {
                 return;
             }
+
         }
         ResetPredicates(Predicates);
         return;
@@ -120,86 +126,88 @@ let Enumerable = (function() {
             return this.Hash.has(val);
         }
         this.TryAdd = function(obj) {
-            let val = this.ExtractValue(obj);
-            if (this.Hash.has(val)) {
-                return undefined;
-            }
-            this.Hash.set(val, obj);
-            this.Array.push(obj);
-            return val;
+            let val  = this.ExtractValue(obj);
+			if(this.Hash.has(val)){
+				return undefined;
+			}
+			this.Hash.set(val,obj);
+			this.Array.push(obj);
+			return val;
         }
         this.GetHashKeyOrInsertNew = function(obj) {
-            let val = this.ExtractValue(obj);
-            if (this.Hash.has(val)) {
-                return val;
-            }
-            this.Hash.set(val, obj);
-            this.Array.push(obj);
-            return val;
+            let val  = this.ExtractValue(obj);
+			if(this.Hash.has(val)){
+				return val;
+			}
+			this.Hash.set(val,obj);
+			this.Array.push(obj);
+			return val;
         }
+
         // Flushes the hash and outputs as array
         this.Flush = function() {
             let rtn = this.Array;
             this.Clear();
             return rtn;
         }
+
         this.Clear = function() {
             scope.Hash.clear();
             scope.Array = [];
         }
-    }
 
-    function NestedSet(model) {
-        this.Model = model;
-        this.Keys = Object.keys(this.Model);
-        const len = this.Keys.length;
-        const breakPt = len - 1;
-        this.Map = new Map();
-        this.has = function(obj) {
-            return this.get(obj) !== undefined;
-        }
-        this.get = function(obj) {
-            let map = this.Map;
-            for (let i = 0; i < len; i++) {
-                let key = this.Keys[i];
-                let val = obj[key];
-                if (map.has(val)) {
-                    if (i === breakPt) {
-                        return map.get(val);
-                    }
-                    map = map.get(val);
-                } else {
-                    return undefined;
-                }
-            }
-            return undefined;
-        }
-        this.add = function(obj, saveVal) {
-            let map = this.Map;
-            for (let i = 0; i < len; i++) {
-                let key = this.Keys[i];
-                let val = obj[key];
-                if (map.has(val) === false) {
-                    if (i === breakPt) {
-                        map.set(val, saveVal);
-                        return;
-                    } else {
-                        map.set(val, new Map());
-                        map = map.get(val);
-                    }
-                } else {
-                    if (i === breakPt) {
-                        return;
-                    } else {
-                        map = map.get(val);
-                    }
-                }
-            }
-        }
-        this.clear = function() {
-            this.Map.clear();
-        }
     }
+	function NestedSet(model){
+		this.Model = model;
+		this.Keys = Object.keys(this.Model);
+		const len = this.Keys.length;
+		const breakPt = len-1;
+		this.Map = new Map();
+		this.has = function(obj){
+			return this.get(obj) !== undefined;
+		}
+		this.get = function(obj){
+			let map = this.Map;
+			for(let i = 0; i < len; i++){
+				let key = this.Keys[i];
+				let val = obj[key];
+				if(map.has(val)){
+					if(i === breakPt){
+						return map.get(val);
+					}
+					map = map.get(val);
+				} else {
+					return undefined;
+				}
+			}
+			return undefined;			
+		}
+		this.add = function(obj,saveVal){
+			let map = this.Map;
+			for(let i = 0; i < len; i++){
+				let key = this.Keys[i];
+				let val = obj[key];
+				if(map.has(val) === false){
+					if(i === breakPt){
+						map.set(val,saveVal);
+						return;
+					} else {
+						map.set(val, new Map());
+						map = map.get(val);
+					}
+				} else {
+					if(i === breakPt){
+						return;
+					} else {
+						map = map.get(val);
+					}
+				}
+			}
+		}
+		this.clear = function(){
+			this.Map.clear();
+		}
+	}
     let OrderPredicate = function(pred, desc) {
         this.SortFunctions = [];
         let scope = this;
@@ -317,9 +325,9 @@ let Enumerable = (function() {
         Enumerable.apply(this, argsToApply);
         // Private variables for module
         let GroupingPredicates = privateData.GroupingPredicate;
-        let HavingFunc = function(arr) {
-            return arr;
-        }
+
+		let HavingFunc = function(arr){return arr;}
+		
         let GroupingFunc = function(arr) {
             if (arr.length === 0) {
                 return arr;
@@ -328,47 +336,48 @@ let Enumerable = (function() {
             const groupsIdx = new Map();
             const model = GroupingPredicates(arr[0]);
             const set = new NestedSet(model);
-            const len = arr.length;
+			const len = arr.length;
+			
             for (let i = 0; i < len; i++) {
                 const item = arr[i];
                 const groupModel = GroupingPredicates(item);
-                if (set.has(groupModel) === false) {
-                    let group = new GroupInternal(groupModel);
-                    set.add(groupModel, group);
-                    groups.push(group);
-                    groupsIdx.set(group, groups.length - 1);
-                    group.Items.push(item);
-                } else {
-                    let group = set.get(groupModel);
-                    group.Items.push(item);
-                }
+				if(set.has(groupModel) === false){
+					let group = new GroupInternal(groupModel);
+					set.add(groupModel,group);			
+					groups.push(group);
+					groupsIdx.set(group,groups.length-1);		
+					group.Items.push(item);				
+				} else {
+					let group = set.get(groupModel);				
+					group.Items.push(item);				
+				}
             }
-            for (let i = 0; i < groups.length; i++) {
-                let group = groups[i];
-                groups[i] = new Group(group.Key, group.Items);
-            }
-            set.clear();
+			for(let i = 0; i < groups.length; i++){
+				let group = groups[i];
+				groups[i] = new Group(group.Key,group.Items);
+			}
+			set.clear();
             return HavingFunc(groups);
         }
         this.AddToForEachStack(function(arr) {
             return GroupingFunc(arr);
         });
-        this.Having = function(pred) {
-            let oldHaving = HavingFunc;
-            HavingFunc = function(arr) {
-                arr = oldHaving(arr);
-                let newArr = [];
-                for (let i = 0; i < arr.length; i++) {
-                    let group = arr[i];
-                    let items = group.Items;
-                    if (pred(items) === true) {
-                        newArr.push(group);
-                    }
-                }
-                return newArr;
-            }
-            return this;
-        }
+		this.Having = function(pred){
+			let oldHaving = HavingFunc;
+			HavingFunc = function(arr){
+				arr = oldHaving(arr);
+				let newArr = [];
+				for(let i = 0; i < arr.length; i++){
+					let group = arr[i];
+					let items = group.Items;
+					if(pred(items) === true){ 
+						newArr.push(group);
+					}
+				}
+				return newArr;
+			}
+			return this;
+		}
     };
 
     function FilteredEnumerable(privateData) {
@@ -382,6 +391,7 @@ let Enumerable = (function() {
         Enumerable.apply(this, argsToApply);
         // Private variables for module
         let WherePredicate = privateData.WherePredicate;
+
         this.AddToPredicateStack(WherePredicate);
 
         function Composite(pred) {
@@ -427,11 +437,14 @@ let Enumerable = (function() {
         scope.AddToPredicateStack = function(pred) {
             scope.Predicates.push(pred);
         }
+
         scope.ProcessPredicates = function(Predicates, data) {
                 ResetPredicates(Predicates);
+
                 if (Predicates.length === 0) {
                     return data;
                 }
+
                 let arr = [];
                 let idx = -1;
                 for (let len = data.length, i = 0; i !== len; i++) {
@@ -501,9 +514,9 @@ let Enumerable = (function() {
             ProcessPredicatesNoReturn(scope.Predicates, arr, action);
             return;
         }
-        scope.AddRawItem = function(item) {
-            scope.Data.push(item);
-        }
+		scope.AddRawItem = function(item){
+			scope.Data.push(item);
+		}
         let AndPredicate = function(pred) {
             this.Predicate = pred;
             this.Execute = function(firstVal, item) {
@@ -522,6 +535,7 @@ let Enumerable = (function() {
         let SplitOrPredicate = function(pred) {
             OrPredicate.apply(this, [pred]);
         }
+
         let WherePredicate = function(pred) {
             this.Predicate = pred;
             this.ChainedPredicates = [new OrPredicate(pred)];
@@ -572,6 +586,7 @@ let Enumerable = (function() {
                         }
                     }
                     scope.lastResult = p.Execute(scope.lastResult, item);
+
                 }
                 return scope.lastResult ? item : InvalidItem;
             }
@@ -1028,6 +1043,7 @@ let Enumerable = (function() {
                 for (let i = 0; i < items.length; i++) {
                     let item = items[i];
                     let val = hash2.ExtractValue(item);
+
                     if (hash2.ContainsFromExtractedValue(val)) {
                         continue;
                     }
@@ -1226,6 +1242,7 @@ let Enumerable = (function() {
                             } else {
                                 obj = new Joining(item, item2);
                             }
+
                             rtn.push(obj);
                         }
                     }
@@ -1341,6 +1358,7 @@ let Enumerable = (function() {
                 let data2 = (data.ToArray ? data.ToArray() : data);
                 let left = [];
                 let right = [];
+
                 // First, process the matches
                 let rtn = [];
                 for (let i = 0; i < arr.length; i++) {
@@ -1389,6 +1407,7 @@ let Enumerable = (function() {
                     } else {
                         obj = new Joining(item, null);
                     }
+
                     rtn.push(obj);
                 }
                 //Right Join
@@ -1408,9 +1427,9 @@ let Enumerable = (function() {
             return new Enumerable(dataToPass);
         }
         scope.Count = function(pred) {
-            if (pred !== undefined) {
-                return scope.Where(x => pred(x)).ToArray().length;
-            }
+			if(pred !== undefined){
+				return scope.Where(x=>pred(x)).ToArray().length;
+			}
             return scope.ToArray().length;
         }
         scope.Average = function(pred) {
@@ -1447,11 +1466,11 @@ let Enumerable = (function() {
             let groups = [];
             level = level || 0;
             if (pred) {
-                groups = scope.GroupBy(v => pred(v));
+                groups = scope.GroupBy(v => ({Value:pred(v)}));
             } else {
-                groups = scope.GroupBy(v => v);
+                groups = scope.GroupBy(v => ({Value:v}));
             }
-            return groups.MaxBy(g => g.Items.length, level);
+            return groups.MaxBy(g => g.Items.Count(), level);
         }
         scope.Sum = function(pred) {
             let arr = scope.ToArray();
@@ -1847,6 +1866,7 @@ let Enumerable = (function() {
         }
     };
     Enumerable.prototype = PublicEnumerable.prototype;
+
     PublicEnumerable.prototype.Extend = function(extenderMethod) {
             extenderMethod(Enumerable);
         }

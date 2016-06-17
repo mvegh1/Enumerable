@@ -1042,212 +1042,256 @@ let Enumerable = (function() {
             this.Left = left;
             this.Right = right;
         }
-        Enumerable.prototype.Join = function(data, joinPred, selectPred) {
+        Enumerable.prototype.Join = function(data, joinKeysLeft,joinKeysRight, selectPred) {
 			let scope = this;
             let dataToPass = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
+			
+			// Uses hash join algorithm
             dataToPass.NewForEachAction = function(arr) {
+				if(arr.length == 0){
+					return arr;
+				}
                 let data2 = (data.ToArray ? data.ToArray() : data);
-                let rtn = [];
-                for (let i = 0; i < arr.length; i++) {
-                    let item = arr[i];
-                    for (let j = 0; j < data2.length; j++) {
-                        let item2 = data2[j];
-                        let joined = joinPred(item, item2);
-                        if (joined) {
-                            let obj;
-                            if (selectPred !== undefined) {
-                                obj = selectPred(item, item2);
-                            } else {
-                                obj = new Joining(item, item2);
-                            }
+				const model = joinKeysLeft(arr[0]);
+				const set = new NestedSet(model);
+				const lenA = arr.length;
+				const lenB = data2.length;
+				
+				for (let i = 0; i < lenA; i++) {
+					const item = arr[i];
+					const leftModel = joinKeysLeft(item);
+					if(set.has(leftModel) === false){
+						set.add(leftModel,[item]);					
+					} else {
+						let group = set.get(leftModel);				
+						group.push(item);		
+					}
+				}
+				
+				let rtn = [];
+				for (let i = 0; i < lenB; i++) {
+					const right = data2[i];
+					const rightModel = joinKeysRight(right);
+					if(set.has(rightModel) === true){
+						let group = set.get(rightModel);
+						for(let j = 0; j < group.length; j++){
+							let left = group[j];
+							if(selectPred !== undefined){
+								rtn.push( selectPred(left,right) );
+							} else {
+								rtn.push( new Joining(left, right) );
+							}
+						}			
+					} 
+				}
 
-                            rtn.push(obj);
-                        }
-                    }
-                }
-                arr = rtn;
-                return arr;
+				return rtn;				
+		
             }
             return new Enumerable(dataToPass);
         }
-        Enumerable.prototype.LeftJoin = function(data, joinPred, selectPred) {
+        Enumerable.prototype.LeftJoin = function(data, joinKeysLeft, joinKeysRight, selectPred) {
 			let scope = this;
             let dataToPass = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
+			
+			// Uses hash join algorithm
             dataToPass.NewForEachAction = function(arr) {
+				if(arr.length == 0){
+					return arr;
+				}
                 let data2 = (data.ToArray ? data.ToArray() : data);
-                let rtn = [];
-                let left = [];
-                for (let i = 0; i < arr.length; i++) {
-                    let item = arr[i];
-                    let found = false;
-                    for (let j = 0; j < data2.length; j++) {
-                        let item2 = data2[j];
-                        let joined = joinPred(item, item2);
-                        if (joined) {
-                            let obj;
-                            if (selectPred !== undefined) {
-                                obj = selectPred(item, item2);
-                            } else {
-                                obj = new Joining(item, item2);
-                            }
-                            rtn.push(obj);
-                            found = true;
-                            continue;
-                        }
-                    }
-                    if (found === false) {
-                        left.push(item);
-                    }
-                }
-                //Left Join
-                for (let i = 0; i < left.length; i++) {
-                    let item = left[i];
-                    let obj;
-                    if (selectPred !== undefined) {
-                        obj = selectPred(item, null);
-                    } else {
-                        obj = new Joining(item, null);
-                    }
-                    rtn.push(obj);
-                }
-                arr = rtn;
-                return arr;
+				const model = joinKeysLeft(arr[0]);
+				const set = new NestedSet(model);
+				const lenA = arr.length;
+				const lenB = data2.length;
+				
+				for (let i = 0; i < lenB; i++) {
+					const item = data2[i];
+					const rightModel = joinKeysRight(item);
+					if(set.has(rightModel) === false){
+						set.add(rightModel,[item]);					
+					} else {
+						let group = set.get(rightModel);				
+						group.push(item);		
+					}
+				}
+				
+				let rtn = [];
+				for (let i = 0; i < lenA; i++) {
+					const left = arr[i];
+					const leftModel = joinKeysLeft(left);
+					if(set.has(leftModel) === true){
+						let group = set.get(leftModel);
+						for(let j = 0; j < group.length; j++){
+							let right = group[j];
+							if(selectPred !== undefined){
+								rtn.push( selectPred(left,right) );
+							} else {
+								rtn.push( new Joining(left, right) );
+							}
+						}			
+					} else {
+						if(selectPred !== undefined){
+							rtn.push( selectPred(left, null) );
+						} else {
+							rtn.push( new Joining(left, null) );
+						}						
+					}
+				}
+
+				return rtn;				
+		
             }
             return new Enumerable(dataToPass);
         }
-        Enumerable.prototype.RightJoin = function(data, joinPred, selectPred) {
+        Enumerable.prototype.RightJoin = function(data, joinKeysLeft, joinKeysRight, selectPred) {
 			let scope = this;
             let dataToPass = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
+			
+			// Uses hash join algorithm
             dataToPass.NewForEachAction = function(arr) {
+				if(arr.length == 0){
+					return arr;
+				}
                 let data2 = (data.ToArray ? data.ToArray() : data);
-                let rtn = [];
-                let right = [];
-                for (let i = 0; i < data2.length; i++) {
-                    let item2 = data2[i];
-                    let found = false;
-                    for (let j = 0; j < arr.length; j++) {
-                        let item = arr[j];
-                        let joined = joinPred(item, item2);
-                        if (joined) {
-                            let obj;
-                            if (selectPred !== undefined) {
-                                obj = selectPred(item, item2);
-                            } else {
-                                obj = new Joining(item, item2);
-                            }
-                            rtn.push(obj);
-                            found = true;
-                            continue;
-                        }
-                    }
-                    if (found === false) {
-                        right.push(item2);
-                    }
-                }
-                //Right Join
-                for (let i = 0; i < right.length; i++) {
-                    let item = right[i];
-                    let obj;
-                    if (selectPred !== undefined) {
-                        obj = selectPred(null, item);
-                    } else {
-                        obj = new Joining(null, item);
-                    }
-                    rtn.push(obj);
-                }
-                arr = rtn;
-                return arr;
+				const model = joinKeysLeft(arr[0]);
+				const set = new NestedSet(model);
+				const lenA = arr.length;
+				const lenB = data2.length;
+				
+				for (let i = 0; i < lenA; i++) {
+					const item = arr[i];
+					const leftModel = joinKeysLeft(item);
+					if(set.has(leftModel) === false){
+						set.add(leftModel,[item]);					
+					} else {
+						let group = set.get(leftModel);				
+						group.push(item);		
+					}
+				}
+				
+				let rtn = [];
+				for (let i = 0; i < lenB; i++) {
+					const right = data2[i];
+					const rightModel = joinKeysRight(right);
+					if(set.has(rightModel) === true){
+						let group = set.get(rightModel);
+						for(let j = 0; j < group.length; j++){
+							let left = group[j];
+							if(selectPred !== undefined){
+								rtn.push( selectPred(left,right) );
+							} else {
+								rtn.push( new Joining(left, right) );
+							}
+						}			
+					} else {
+						if(selectPred !== undefined){
+							rtn.push( selectPred(null,right) );
+						} else {
+							rtn.push( new Joining(null, right) );
+						}						
+					}
+				}
+
+				return rtn;				
+		
             }
             return new Enumerable(dataToPass);
         }
-        Enumerable.prototype.FullJoin = function(data, joinPred, selectPred) {
+        Enumerable.prototype.FullJoin = function(data, joinKeysLeft, joinKeysRight, selectPred) {
 			let scope = this;
             let dataToPass = {
                 Data: scope.Data,
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
+			
+			// Uses hash join algorithm
             dataToPass.NewForEachAction = function(arr) {
+				if(arr.length == 0){
+					return arr;
+				}
                 let data2 = (data.ToArray ? data.ToArray() : data);
-                let left = [];
-                let right = [];
-
-                // First, process the matches
-                let rtn = [];
-                for (let i = 0; i < arr.length; i++) {
-                    let item = arr[i];
-                    let found = false;
-                    for (let j = 0; j < data2.length; j++) {
-                        let item2 = data2[j];
-                        let joined = joinPred(item, item2);
-                        if (joined) {
-                            let obj;
-                            if (selectPred !== undefined) {
-                                obj = selectPred(item, item2);
-                            } else {
-                                obj = new Joining(item, item2);
-                            }
-                            rtn.push(obj);
-                            found = true;
-                            continue;
-                        }
-                    }
-                    if (found === false) {
-                        left.push(item);
-                    }
-                }
-                for (let i = 0; i < data2.length; i++) {
-                    let item2 = data2[i];
-                    let found = false;
-                    for (let j = 0; j < arr.length; j++) {
-                        let item = arr[j];
-                        let joined = joinPred(item, item2);
-                        if (joined) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (found === false) {
-                        right.push(item2);
-                    }
-                }
-                //Left Join
-                for (let i = 0; i < left.length; i++) {
-                    let item = left[i];
-                    let obj;
-                    if (selectPred !== undefined) {
-                        obj = selectPred(item, null);
-                    } else {
-                        obj = new Joining(item, null);
-                    }
-
-                    rtn.push(obj);
-                }
-                //Right Join
-                for (let i = 0; i < right.length; i++) {
-                    let item = right[i];
-                    let obj;
-                    if (selectPred !== undefined) {
-                        obj = selectPred(null, item);
-                    } else {
-                        obj = new Joining(null, item);
-                    }
-                    rtn.push(obj);
-                }
-                arr = rtn;
-                return arr;
+				const model = joinKeysLeft(arr[0]);
+				let set = new NestedSet(model);
+				const lenA = arr.length;
+				const lenB = data2.length;
+				let rtn = [];
+				
+				// Fill the set with items from the right side
+				for (let i = 0; i < lenB; i++) {
+					const item = data2[i];
+					const rightModel = joinKeysRight(item);
+					if(set.has(rightModel) === false){
+						set.add(rightModel,[item]);					
+					} else {
+						let group = set.get(rightModel);				
+						group.push(item);		
+					}
+				}
+				
+				// Do a left join first
+				for (let i = 0; i < lenA; i++) {
+					const left = arr[i];
+					const leftModel = joinKeysLeft(left);
+					if(set.has(leftModel) === true){
+						let group = set.get(leftModel);
+						for(let j = 0; j < group.length; j++){
+							let right = group[j];
+							if(selectPred !== undefined){
+								rtn.push( selectPred(left,right) );
+							} else {
+								rtn.push( new Joining(left, right) );
+							}
+						}			
+					} else {
+						if(selectPred !== undefined){
+							rtn.push( selectPred(left, null) );
+						} else {
+							rtn.push( new Joining(left, null) );
+						}						
+					}
+				}
+				
+				set.clear();
+				
+				// Fill the set with items from the left side
+				for (let i = 0; i < lenA; i++) {
+					const item = arr[i];
+					const leftModel = joinKeysLeft(item);
+					if(set.has(leftModel) === false){
+						set.add(leftModel,[item]);					
+					} else {
+						let group = set.get(leftModel);				
+						group.push(item);		
+					}
+				}
+				
+				// Get the remaining items missing from the right join
+				for (let i = 0; i < lenB; i++) {
+					const right = data2[i];
+					const rightModel = joinKeysRight(right);
+					if(set.has(rightModel) === false){
+						if(selectPred !== undefined){
+							rtn.push( selectPred(null, right) );
+						} else {
+							rtn.push( new Joining(null, right) );
+						}			
+					} 
+				}
+				return rtn;				
             }
             return new Enumerable(dataToPass);
         }

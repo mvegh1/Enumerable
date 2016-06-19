@@ -304,9 +304,6 @@ let Enumerable = (function() {
             ProcessPredicatesNoReturn(this.Predicates, arr, action);
             return;
         }
-		Enumerable.prototype.AddRawItem = function(item){
-			this.Data.push(item);
-		}
         let AndPredicate = function(pred) {
             this.Predicate = pred;
             this.Execute = function(firstVal, item) {
@@ -1760,6 +1757,60 @@ let Enumerable = (function() {
             };
             return new Enumerable(privData)
         }
+        Enumerable.prototype.SequenceEqual = function(other,comparer) {
+			let scope = this;
+            var a1 = scope.ToArray();
+			var a2 = ParseDataAsArray(other);
+			if(a1.length !== a2.length){
+				return false;
+			}
+			for(let i = 0; i < a1.length; i++){
+				let itemA = a1[i];
+				let itemB = a2[i];
+				if(comparer !== undefined){
+					if(comparer(itemA,itemB) === false){
+						return false;
+					}
+				} else {
+					if(itemA !== itemB){
+						return false;
+					}
+				}
+			}
+			return true;
+        }
+        Enumerable.prototype.SequenceEqualUnordered = function(other,keyLeft,keyRight) {
+			let scope = this;
+            var a1 = scope.ToArray();
+			var a2 = ParseDataAsArray(other);
+			if(a1.length === 0 && a2.length === 0){
+				return true;
+			}
+			if(a1.length === 0 && a2.length !== 0 || a1.length !== 0 && a2.length === 0){
+				return false;
+			}
+			
+			const model = keyLeft(a1[0]);
+			const set = new NestedSet(model);
+			const lenA = a1.length;
+			const lenB = a2.length;
+			
+			for (let i = 0; i < lenA; i++) {
+				const item = a1[i];
+				const leftModel = keyLeft(item);
+				if(set.has(leftModel) === false){
+					set.add(leftModel,[item]);					
+				} 
+			}
+			for(let i = 0; i < lenB; i++){
+				const item = a2[i];
+				const rightModel = keyRight(item);
+				if(set.has(rightModel) === false){
+					return false;		
+				} 				
+			}
+			return true;
+		}
 		
     let OrderPredicate = function(pred, desc) {
         this.SortFunctions = [];

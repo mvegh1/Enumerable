@@ -15,6 +15,10 @@ let Enumerable = (function() {
 		this.Key = key;
 		this.Items = ParseDataAsEnumerable(data);
 	}
+	function Range(min,max){
+		this.Min = min;
+		this.Max = max;
+	}
 	function Joining(left, right) {
 		this.Left = left;
 		this.Right = right;
@@ -931,6 +935,20 @@ let Enumerable = (function() {
             }
             return new Enumerable(data);
         }
+        Enumerable.prototype.Prepend = function(items) {
+			let scope = this;
+            let data = {
+                Data: scope.Data,
+                Predicates: scope.Predicates,
+                ForEachActionStack: scope.ForEachActionStack
+            };
+            data.NewForEachAction = function(arr) {
+                let itemArr = ParseDataAsArray(items);
+                let rtn = itemArr.concat(arr);
+                return rtn;
+            }
+            return new Enumerable(data);
+        }
         Enumerable.prototype.Zip = function(items, pred) {
 			let scope = this;
             let data = {
@@ -1283,6 +1301,26 @@ let Enumerable = (function() {
             }
             return sum / arr.length;
         }
+        Enumerable.prototype.Variance = function(pred) {
+			let scope = this;
+            let avg = scope.Average(pred);
+			let cnt = scope.Count();
+			if(pred !== undefined){
+				return scope.Select(function(x){
+					let val = pred(x) - avg;
+					return (val*val);
+				}).Sum() / cnt;
+			}
+			return scope.Select(function(x){
+				let val = x - avg;
+				return (val*val);
+			}).Sum() / cnt;
+        }
+		Enumerable.prototype.StdDev = function(pred){
+			let scope = this;
+			let v = scope.Variance(pred);
+			return Math.sqrt(v);
+		}
         Enumerable.prototype.Median = function(pred) {
 			let scope = this;
             let values = [];
@@ -1523,6 +1561,18 @@ let Enumerable = (function() {
             let minPred = new MinPredicate(pred, level);
             return minPred.MinBy(scope);
         }
+        Enumerable.prototype.Range = function(pred, level) {
+			let scope = this;
+            let minPred = new MinPredicate(pred, level);
+			let maxPred = new MaxPredicate(pred,level);
+            return new Range(minPred.Min(scope), maxPred.Max(scope));
+        }
+        Enumerable.prototype.RangeBy = function(pred, level) {
+			let scope = this;
+            let minPred = new MinPredicate(pred, level);
+			let maxPred = new MaxPredicate(pred,level);
+            return new Range(minPred.MinBy(scope), maxPred.MaxBy(scope));
+        }
         Enumerable.prototype.Aggregate = function(pred, seed) {
 			let scope = this;
             let curr = seed || null;
@@ -1713,7 +1763,7 @@ let Enumerable = (function() {
                 ForEachActionStack: scope.ForEachActionStack
             };
             let oldPredicate = data.Predicate;
-            data.NewPredicate = new TracePredicate();
+            data.NewPredicate = new TracePredicate(msg);
             return new Enumerable(data);
         }
         Enumerable.prototype.Write = function(symbol, pred) {

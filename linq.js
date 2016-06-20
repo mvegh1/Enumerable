@@ -115,7 +115,7 @@ let Enumerable = (function() {
             }
             return obj;
         }
-        this.ContainsItem = function(obj) {
+        this.Contains = function(obj) {
             let val = this.ExtractValue(obj);
             return this.Hash.has(val);
         }
@@ -888,45 +888,35 @@ let Enumerable = (function() {
             this.Predicate = pred;
             this.Reset = function() {}
             this.Execute = function(arr) {
-                let items = scope.Items;
-                let pred = scope.Predicate;
-                let itemArr = ParseDataAsArray(items);
-                let rtn = [];
-                let hash = new HashMap(pred);
-                let dqed = new HashMap(pred);
-                for (let i = 0; i < arr.length; i++) {
-                    let item = arr[i];
-                    let result = hash.TryAdd(item);
-                    if (result === undefined) {
-                        continue;
-                    }
-                    let val = hash.ExtractValue(item);
-                    let flagOut = false;
-                    for (let j = 0; j < itemArr.length; j++) {
-                        let jItem = itemArr[j];
-                        let jVal = hash.ExtractValue(jItem);
-                        if (hash.ContainsFromExtractedValue(jVal)) {
-                            dqed.TryAdd(jItem);
-                            flagOut = true;
-                            break;
-                        }
-                    }
-                    if (flagOut) {
-                        continue;
-                    }
-                    rtn.push(item);
-                }
-                for (let i = 0; i < itemArr.length; i++) {
-                    let item = itemArr[i];
-                    let val = hash.ExtractValue(item);
-                    if (!hash.ContainsFromExtractedValue(val) && !hash.ContainsFromExtractedValue(val)) {
-                        hash.TryAdd(item);
-                        rtn.push(item);
-                    }
-                }
-                hash.Clear();
-                dqed.Clear();
-                return rtn;
+				let setA = arr;
+				let setB = ParseDataAsArray(items);
+				let rtn = []
+				let hash = new HashMap(pred);
+				for(let i = 0; i < setA.length; i++){
+				   let item = setA[i];
+					hash.TryAdd(item);
+				}
+
+				for(let i=0; i < setB.length;i++){
+				   var item = setB[i];
+				   if(hash.Contains(item) === false){
+					   rtn.push(item);
+				   }
+				}
+
+				hash = new HashMap(pred);
+				for(let i = 0; i < setB.length; i++){
+				   let item = setB[i];
+				  hash.TryAdd(item);
+				}
+
+				for(let i=0; i < setA.length;i++){
+				   var item = setA[i];
+				   if(hash.Contains(item) === false){
+					   rtn.push(item);
+				   }
+				}
+				return rtn;
             }
         }
         Enumerable.prototype.Disjoint = function(items, pred) {

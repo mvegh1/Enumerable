@@ -10,11 +10,114 @@ let Enumerable = (function() {
     function GroupInternal(key) {
         this.Key = key;
         this.Items = [];
-		
     }
 	function Group(key,data){
 		this.Key = key;
 		this.Items = ParseDataAsEnumerable(data);
+	}
+	function Joining(left, right) {
+		this.Left = left;
+		this.Right = right;
+	}
+    function HashMap(pred) {
+        this.Hash = new Map();
+        this.Array = [];
+        this.Predicate = pred;
+        let scope = this;
+        this.ExtractValue = function(obj) {
+            if (scope.Predicate) {
+                return scope.Predicate(obj);
+            }
+            return obj;
+        }
+        this.Contains = function(obj) {
+            let val = this.ExtractValue(obj);
+            return this.Hash.has(val);
+        }
+        this.ContainsFromExtractedValue = function(val) {
+            return this.Hash.has(val);
+        }
+        this.TryAdd = function(obj) {
+            let val  = this.ExtractValue(obj);
+			if(this.Hash.has(val)){
+				return undefined;
+			}
+			this.Hash.set(val,obj);
+			this.Array.push(obj);
+			return val;
+        }
+        this.GetHashKeyOrInsertNew = function(obj) {
+            let val  = this.ExtractValue(obj);
+			if(this.Hash.has(val)){
+				return val;
+			}
+			this.Hash.set(val,obj);
+			this.Array.push(obj);
+			return val;
+        }
+
+        // Flushes the hash and outputs as array
+        this.Flush = function() {
+            let rtn = this.Array;
+            this.Clear();
+            return rtn;
+        }
+
+        this.Clear = function() {
+            scope.Hash.clear();
+            scope.Array = [];
+        }
+    }
+	function NestedSet(model){
+		this.Model = model;
+		this.Keys = Object.keys(this.Model);
+		const len = this.Keys.length;
+		const breakPt = len-1;
+		this.Map = new Map();
+		this.has = function(obj){
+			return this.get(obj) !== undefined;
+		}
+		this.get = function(obj){
+			let map = this.Map;
+			for(let i = 0; i < len; i++){
+				let key = this.Keys[i];
+				let val = obj[key];
+				if(map.has(val)){
+					if(i === breakPt){
+						return map.get(val);
+					}
+					map = map.get(val);
+				} else {
+					return undefined;
+				}
+			}
+			return undefined;			
+		}
+		this.add = function(obj,saveVal){
+			let map = this.Map;
+			for(let i = 0; i < len; i++){
+				let key = this.Keys[i];
+				let val = obj[key];
+				if(map.has(val) === false){
+					if(i === breakPt){
+						map.set(val,saveVal);
+						return;
+					} else {
+						map.set(val, new Map());
+						map = map.get(val);
+					}
+				} else {
+					if(i === breakPt){
+						return;
+					} else {
+						map = map.get(val);
+					}
+				}
+			}
+		}
+		this.clear = function(){
+			this.Map.clear();
+		}
 	}
     // the module API
     function PublicEnumerable(data) {
@@ -87,124 +190,6 @@ let Enumerable = (function() {
         ResetPredicates(Predicates);
         return;
     }
-
-    function CreateGuid() {
-        let alphabet = "abcdefghijklmnnopqrstuvwxyz0123456789".split("");
-        let guid = "";
-        for (let i = 0; i < 5; i++) {
-            for (let j = 0; j < 4; j++) {
-                let idx = Math.floor(alphabet.length * Math.random());
-                let letter = alphabet[idx];
-                guid += letter;
-            }
-            if (i < 4) {
-                guid += "-";
-            }
-        }
-        return guid;
-    }
-
-    function HashMap(pred) {
-        this.Hash = new Map();
-        this.Array = [];
-        this.Predicate = pred;
-        let scope = this;
-        this.ExtractValue = function(obj) {
-            if (scope.Predicate) {
-                return scope.Predicate(obj);
-            }
-            return obj;
-        }
-        this.Contains = function(obj) {
-            let val = this.ExtractValue(obj);
-            return this.Hash.has(val);
-        }
-        this.ContainsFromExtractedValue = function(val) {
-            return this.Hash.has(val);
-        }
-        this.TryAdd = function(obj) {
-            let val  = this.ExtractValue(obj);
-			if(this.Hash.has(val)){
-				return undefined;
-			}
-			this.Hash.set(val,obj);
-			this.Array.push(obj);
-			return val;
-        }
-        this.GetHashKeyOrInsertNew = function(obj) {
-            let val  = this.ExtractValue(obj);
-			if(this.Hash.has(val)){
-				return val;
-			}
-			this.Hash.set(val,obj);
-			this.Array.push(obj);
-			return val;
-        }
-
-        // Flushes the hash and outputs as array
-        this.Flush = function() {
-            let rtn = this.Array;
-            this.Clear();
-            return rtn;
-        }
-
-        this.Clear = function() {
-            scope.Hash.clear();
-            scope.Array = [];
-        }
-
-    }
-	function NestedSet(model){
-		this.Model = model;
-		this.Keys = Object.keys(this.Model);
-		const len = this.Keys.length;
-		const breakPt = len-1;
-		this.Map = new Map();
-		this.has = function(obj){
-			return this.get(obj) !== undefined;
-		}
-		this.get = function(obj){
-			let map = this.Map;
-			for(let i = 0; i < len; i++){
-				let key = this.Keys[i];
-				let val = obj[key];
-				if(map.has(val)){
-					if(i === breakPt){
-						return map.get(val);
-					}
-					map = map.get(val);
-				} else {
-					return undefined;
-				}
-			}
-			return undefined;			
-		}
-		this.add = function(obj,saveVal){
-			let map = this.Map;
-			for(let i = 0; i < len; i++){
-				let key = this.Keys[i];
-				let val = obj[key];
-				if(map.has(val) === false){
-					if(i === breakPt){
-						map.set(val,saveVal);
-						return;
-					} else {
-						map.set(val, new Map());
-						map = map.get(val);
-					}
-				} else {
-					if(i === breakPt){
-						return;
-					} else {
-						map = map.get(val);
-					}
-				}
-			}
-		}
-		this.clear = function(){
-			this.Map.clear();
-		}
-	}
 
    // The private constructor. Define EVERYTHING in here
     let Enumerable = function(privateData) {
@@ -1024,11 +1009,6 @@ let Enumerable = (function() {
             data.GroupingPredicate = pred;
             return new GroupedEnumerable(data);
         }
-
-        function Joining(left, right) {
-            this.Left = left;
-            this.Right = right;
-        }
         Enumerable.prototype.Join = function(data, joinKeysLeft,joinKeysRight, selectPred) {
 			let scope = this;
             let dataToPass = {
@@ -1658,7 +1638,7 @@ let Enumerable = (function() {
 			let scope = this;
             return scope.OrderBy(Enumerable.Functions.ShuffleSort);
         }
-        Enumerable.prototype.Sequence = function(cnt, generator) {
+        Enumerable.prototype.Scan = function(seed,generator) {
 			let scope = this;
             let data = {
                 Data: scope.Data,
@@ -1666,9 +1646,22 @@ let Enumerable = (function() {
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                let rtn = arr.slice();
-                for (let i = 0; i < cnt; i++) {
-                    rtn.push(generator(i));
+				if(arr.length === 0){
+					return arr;
+				}
+                let rtn = [];
+				let prev = seed || arr[0];
+				let curr = prev;
+				let startIdx = 0;
+				if(prev === null){
+					startIdx = 1;
+				}
+                for (let i = startIdx; i < arr.length; i++) {
+					let item = arr[i];
+					let oldCurr = curr;
+					curr = generator(prev,curr,i);
+					prev = oldCurr;
+                    rtn.push(curr);
                 }
                 return rtn;
             }
@@ -1800,6 +1793,20 @@ let Enumerable = (function() {
 				} 				
 			}
 			return true;
+		}
+		Enumerable.prototype.Sequence = function(cnt,seed,generator) {
+			let scope = this;
+			let data = {
+				Data: scope.Data,
+				Predicates: scope.Predicates,
+				ForEachActionStack: scope.ForEachActionStack
+			};
+			data.NewForEachAction = function(arr) {
+				let rtn = arr;
+				let newEnum = PublicEnumerable.Sequence(cnt,seed,generator).ToArray();
+				return rtn.concat(newEnum);
+			}
+			return new Enumerable(data);
 		}
 		
     let OrderPredicate = function(pred, desc) {
@@ -2053,6 +2060,16 @@ let Enumerable = (function() {
     PublicEnumerable.Empty = function() {
             return PublicEnumerable.From([]);
         }
+	PublicEnumerable.Sequence = function(cnt,seed,generator) {
+		let arr = [];
+		seed = seed || [];
+		arr = seed.splice();
+		for (let i = 0; i < cnt; i++) {
+			let newVal = generator(arr,i);
+			arr.push(newVal);
+		}
+		return ParseDataAsEnumerable(arr);
+	}
         // Internal Utilities
     Enumerable.Functions = {};
     Enumerable.Functions.SortAsc = function(a, b) {

@@ -156,7 +156,16 @@ let Enumerable = (function() {
 		});
 
     }
-
+	
+	function CreateDataForNewEnumerable(enumerable){
+		let scope = enumerable;
+		let dataToPass = {
+			Data: scope.Data,
+			Predicates: scope.Predicates,
+			ForEachActionStack: scope.ForEachActionStack
+		};	
+		return dataToPass;
+	}
     function ResetPredicates(Predicates) {
         for (let i = 0; i < Predicates.length; i++) {
             let pred = Predicates[i];
@@ -241,7 +250,10 @@ let Enumerable = (function() {
                 return arr;
             }
             // Private variables for module
-        scope.Data = privateData.Data || [];
+		scope.Data = [];
+		if(privateData.Data !== undefined){
+			scope.Data = privateData.Data.slice();
+		}
         scope.Predicates = [];
         if (privateData.Predicates) {
             scope.Predicates = privateData.Predicates.slice();
@@ -273,6 +285,12 @@ let Enumerable = (function() {
             arr = this.ProcessPredicates(this.Predicates, arr);
             return arr;
         }
+		Enumerable.prototype.ToReadOnlyArray = function() {
+			let scope = this;
+			let arr = scope.ToArray();
+			Object.freeze(arr);
+			return arr;
+		}
         Enumerable.prototype.ToDictionary = function(predKey, predVal) {
             let arr = this.ToArray();
             let rtn = {};
@@ -1029,11 +1047,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Join = function(data, joinKeysLeft,joinKeysRight, selectPred) {
 			let scope = this;
-            let dataToPass = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let dataToPass = CreateDataForNewEnumerable(scope);
 			
 			// Uses hash join algorithm
             dataToPass.NewForEachAction = function(arr) {
@@ -1081,11 +1095,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.LeftJoin = function(data, joinKeysLeft, joinKeysRight, selectPred) {
 			let scope = this;
-            let dataToPass = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let dataToPass = CreateDataForNewEnumerable(scope);
 			
 			// Uses hash join algorithm
             dataToPass.NewForEachAction = function(arr) {
@@ -1139,18 +1149,14 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.RightJoin = function(data, joinKeysLeft, joinKeysRight, selectPred) {
 			let scope = this;
-            let dataToPass = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let dataToPass = CreateDataForNewEnumerable(scope);
 			
 			// Uses hash join algorithm
             dataToPass.NewForEachAction = function(arr) {
 				if(arr.length == 0){
 					return arr;
 				}
-                let data2 = (data.ToArray ? data.ToArray() : data);
+                let data2 = ParseDataAsArray(data);
 				const model = joinKeysLeft(arr[0]);
 				const set = new NestedSet(model);
 				const lenA = arr.length;
@@ -1197,11 +1203,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.FullJoin = function(data, joinKeysLeft, joinKeysRight, selectPred) {
 			let scope = this;
-            let dataToPass = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let dataToPass = CreateDataForNewEnumerable(scope);
 			
 			// Uses hash join algorithm
             dataToPass.NewForEachAction = function(arr) {
@@ -1302,7 +1304,7 @@ let Enumerable = (function() {
             return sum / arr.length;
         }
         Enumerable.prototype.Variance = function(pred) {
-			let scope = this;
+			let scope = this.ToEnumerable();
             let avg = scope.Average(pred);
 			let cnt = scope.Count();
 			if(pred !== undefined){
@@ -1602,11 +1604,8 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.InsertRange = function(idx, data) {
 			let scope = this;
-            let dataToPass = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let dataToPass = CreateDataForNewEnumerable(scope);
+			
             dataToPass.NewForEachAction = function(arr) {
                 let rtn = [];
                 for (let i = 0; i < arr.length; i++) {
@@ -2072,7 +2071,7 @@ let Enumerable = (function() {
 	FilteredEnumerable.prototype = Enumerable.prototype;
 	
     PublicEnumerable.prototype.Extend = function(extenderMethod) {
-            extenderMethod(Enumerable);
+            extenderMethod(Enumerable.prototype);
         }
         // The preferred smart constructor
     PublicEnumerable.From = function(data) {

@@ -19,6 +19,10 @@ let Enumerable = (function() {
 		this.Min = min;
 		this.Max = max;
 	}
+	function KeyValuePair(key,value){
+		this.Key = key;
+		this.Value = value;
+	}
 	function Joining(left, right) {
 		this.Left = left;
 		this.Right = right;
@@ -123,7 +127,113 @@ let Enumerable = (function() {
 			this.Map.clear();
 		}
 	}
-    // the module API
+    function Dictionary(){
+		this._map = new Map();
+	}
+	Object.defineProperty(Dictionary.prototype, "Keys", {
+		get: function getKeys() {
+			let keys = [];
+			let kI = this._map.keys();
+			let currentKey = null;
+			while((currentKey = kI.next()).done === false){
+			   keys.push(currentKey.value);
+			}
+			return keys;
+		}
+	});
+	Object.defineProperty(Dictionary.prototype, "Values", {
+		get: function getValues() {
+			let rtn = [];
+			let keys = this.Keys;
+			for(let i = 0; i < keys.length; i++){
+				rtn.push( this._map.get(keys[i]) );
+			}
+			return rtn;
+		}
+	});
+	Dictionary.prototype.ForEach = function(action){
+		let scope = this;
+		let keys = scope.Keys;
+		for(let i = 0; i < keys.length; i++){
+			let key = keys[i];
+			let val = scope._map.get(key);
+			let kvp = new KeyValuePair(key,val);
+			let result = action(kvp);
+			if(result === false){
+				break;
+			}
+		}
+	}
+	Dictionary.prototype.ContainsKey = function(key){
+		return this._map.has(key);
+	}
+	Dictionary.prototype.ContainsValue = function(val){
+		let scope = this;
+		let result = false;
+		scope.ForEach( function(kvp){
+			if(kvp.Value === val){
+				result = true;
+				return false;
+			}
+		});
+		return result;
+	}
+	Dictionary.prototype.Get = function(key){
+		let scope = this;
+		if(scope._map.has(key) === false){
+			throw new Error("Dictionary does not contain the given key: " + key);
+		}
+		return scope._map.get(key);
+	}
+	Dictionary.prototype.Add = function(key,value){
+		let scope = this;
+		if(scope._map.has(key)){
+			throw new Error("Dictionary already contains the given key: " + key);
+		}
+		scope._map.set(key,value);
+	}
+	Dictionary.prototype.Clear = function(){
+		this._map.clear();
+	}
+	Dictionary.prototype.Remove = function(key){
+	    this._map.delete(key);
+	}
+	Dictionary.prototype.ToArray = function(){
+		let arr = [];
+		this.ForEach(kvp => {
+			arr.push(kvp);
+		});
+		return arr;		
+	}
+	Dictionary.prototype.ToEnumerable = function(){
+		let arr = this.ToArray();
+		return ParseDataAsEnumerable(arr);
+	}
+	function Lookup(){
+		Dictionary.apply(this,[]);
+		let scope = this;
+	}
+	Lookup.prototype = Object.create(Dictionary.prototype);
+	Lookup.prototype.ContainsValue = function(val){
+		let scope = this;
+		let result = false;
+		scope.ForEach( function(kvp){
+			if(kvp.Value.indexOf(val) > -1){
+				result = true;
+				return false;
+			}
+		});
+		return result;
+	}
+	Lookup.prototype.Add = function(key,value){
+		let scope = this;
+		if(scope._map.has(key) === false){
+			scope._map.set(key,[]);
+		}
+		scope._map.get(key).push(value);
+	}	
+	
+	// the module API
     function PublicEnumerable(data) {
         let d = ParseDataAsArray(data);
         return new Enumerable({
@@ -293,18 +403,27 @@ let Enumerable = (function() {
 		}
         Enumerable.prototype.ToDictionary = function(predKey, predVal) {
             let arr = this.ToArray();
-            let rtn = {};
+            let rtn = new Dictionary();
             for (let i = 0; i < arr.length; i++) {
                 let item = arr[i];
-                let key = predKey(item).toString();
+                let key = predKey(item);
                 let val = predVal(item);
-                if (rtn[key] !== undefined) {
-                    throw Error("Dictionary already contains the specified key: " + key);
-                }
-                rtn[key] = val;
+                rtn.Add(key,val);
+            }
+            return rtn;
+		}
+         Enumerable.prototype.ToLookup = function(predKey, predVal) {
+            let arr = this.ToArray();
+            let rtn = new Lookup();
+            for (let i = 0; i < arr.length; i++) {
+                let item = arr[i];
+                let key = predKey(item);
+                let val = predVal(item);
+                rtn.Add(key,val);
             }
             return rtn;
         }
+		
         Enumerable.prototype.ForEach = function(action) {
             let arr = this.Data;
             arr = this.ForEachActionStack[this.ForEachActionStack.length - 1](arr);

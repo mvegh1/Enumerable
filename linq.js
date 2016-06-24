@@ -133,18 +133,18 @@ let Enumerable = (function() {
 	Object.defineProperty(Dictionary.prototype, "Keys", {
 		get: function getKeys() {
 			let rtn = Array.from(this._map.keys());
-			return rtn;
+			return ParseDataAsEnumerable(rtn);
 		}
 	});
 	Object.defineProperty(Dictionary.prototype, "Values", {
 		get: function getValues() {
 			let rtn = Array.from(this._map.values());
-			return rtn;
+			return ParseDataAsEnumerable(rtn);
 		}
 	});
 	Dictionary.prototype.ForEach = function(action){
 		let scope = this;
-		let keys = scope.Keys;
+		let keys = scope.Keys.ToArray();
 		for(let i = 0; i < keys.length; i++){
 			let key = keys[i];
 			let val = scope._map.get(key);
@@ -209,7 +209,7 @@ let Enumerable = (function() {
 		let scope = this;
 		let result = false;
 		scope.ForEach( function(kvp){
-			if(kvp.Value.indexOf(val) > -1){
+			if(kvp.Value.Contains(val) > -1){
 				result = true;
 				return false;
 			}
@@ -219,9 +219,9 @@ let Enumerable = (function() {
 	Lookup.prototype.Add = function(key,value){
 		let scope = this;
 		if(scope._map.has(key) === false){
-			scope._map.set(key,[]);
+			scope._map.set(key,ParseDataAsEnumerable([]));
 		}
-		scope._map.get(key).push(value);
+		scope._map.get(key).Data.push(value);
 	}	
 	
 	// the module API
@@ -304,10 +304,70 @@ let Enumerable = (function() {
         ResetPredicates(Predicates);
         return;
     }
+	
 
+
+	function Enumerator(data){
+		this.Data = data;
+		this.Index = -1;
+		this.Current = undefined;
+		this.Done = false;
+	}
+	function EnumeratorItem(val,done){
+		this.Value = val;
+		this.Done = done;
+	}
+	Enumerator.prototype.Next = function(){
+		if(this.Index >= this.Data.length){
+			return new EnumeratorItem(undefined,true);
+		}
+		this.Index++;
+		let done = this.Index >= this.Data.length;
+		this.Done = done;
+		return new EnumeratorItem(this.Data[this.Index],done);
+	}
+	function LazyEnumerator(data){
+		this.Data = data.Data;
+		this.Enumerable = data;
+		this.Index = -1;
+		this.Current = undefined;
+		this.Done = false;
+	}	
+	LazyEnumerator.prototype.Next = function(){
+		if(this.Index === -1){
+            this.Data = this.Enumerable.ForEachActionStack[this.Enumerable.ForEachActionStack.length - 1](this.Data);		
+		}
+		if(this.Index >= this.Data.length){
+			ResetPredicates(this.Enumerable.Predicates);
+			return new EnumeratorItem(undefined,true);
+		}
+		let item = InvalidItem;
+		while(item === InvalidItem){
+			this.Index++;
+			if(this.Index >= this.Data.length){
+				ResetPredicates(this.Enumerable.Predicates);
+				return new EnumeratorItem(undefined,true);
+			}			
+			item = this.Data[this.Index];
+			for (let j = 0, len2 = this.Enumerable.Predicates.length; j != len2; j++) {
+				let Predicate = this.Enumerable.Predicates[j];
+				item = Predicate.Execute(item);
+				if (item === InvalidItem) {
+					break;
+				}
+			}
+			if (item === InvalidItem) {
+				continue;
+			}
+			let done = this.Index >= this.Data.length;
+			this.Done = done;
+			return new EnumeratorItem(item,done);			
+        }
+	}
    // The private constructor. Define EVERYTHING in here
     let Enumerable = function(privateData) {
         let scope = this;
+		
         // Private methods for module
         scope.AddToForEachStack = function(action) {
             let oldFeA = scope.ForEachActionStack[scope.ForEachActionStack.length - 1];
@@ -371,6 +431,22 @@ let Enumerable = (function() {
         }
 	}
 
+		Enumerable.prototype.GetEnumerator = function(){
+			return new LazyEnumerator(this);
+		}
+		Enumerable.prototype[Symbol.iterator] = function () {
+				let enumerator = this.GetEnumerator();
+				return {
+					next: () => {
+						let next = enumerator.Next();
+						let value = next.Value;
+						enumerator.Current = value;
+						let done = next.Done;
+						return { value, done };
+					}
+				};
+		}
+		
         Enumerable.prototype.IsInvalidItem = function(item) {
             return item == InvalidItem;
         }
@@ -420,24 +496,6 @@ let Enumerable = (function() {
             arr = this.ForEachActionStack[this.ForEachActionStack.length - 1](arr);
             ProcessPredicatesNoReturn(this.Predicates, arr, action);
             return;
-        }
-        let AndPredicate = function(pred) {
-            this.Predicate = pred;
-            this.Execute = function(firstVal, item) {
-                return firstVal && this.Predicate(item);
-            }
-        }
-        let SplitAndPredicate = function(pred) {
-            AndPredicate.apply(this, [pred]);
-        }
-        let OrPredicate = function(pred) {
-            this.Predicate = pred;
-            this.Execute = function(firstVal, item) {
-                return firstVal || this.Predicate(item);
-            }
-        }
-        let SplitOrPredicate = function(pred) {
-            OrPredicate.apply(this, [pred]);
         }
 
         let WherePredicate = function(pred) {

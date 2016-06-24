@@ -865,7 +865,7 @@ let Enumerable = (function() {
             let scope = this;
             this.Items = items;
             this.Predicate = pred || function(x){return x;}
-			this.Predicate2 = pred2 || this.Predicate;
+			this.Predicate2 = pred2 || function(x){return x;}
             this.Reset = function() {}
             this.Execute = function(arr) {
                 let items = ParseDataAsArray(scope.Items);
@@ -909,7 +909,7 @@ let Enumerable = (function() {
             let scope = this;
             this.Items = items;
             this.Predicate = pred || function(x){return x;}
-			this.Predicate2 = pred2 || this.Predicate;
+			this.Predicate2 = pred2 || function(x){return x;}
             this.Reset = function() {}
             this.Execute = function(arr) {
                 let rtn = [];
@@ -955,7 +955,7 @@ let Enumerable = (function() {
             let scope = this;
             this.Items = items;
             this.Predicate = pred || function(x){return x;}
-			this.Predicate2 = pred2 || this.Predicate;
+			this.Predicate2 = pred2 || function(x){return x;}
             this.Reset = function() {}
             this.Execute = function(arr) {
 				let setA = arr;
@@ -1011,7 +1011,7 @@ let Enumerable = (function() {
         Enumerable.prototype.Except = function(items, pred, pred2) {
 			let scope = this;
 			pred = pred || function(x){return x;}
-			pred2 = pred2 || pred;
+			pred2 = pred2 || function(x){return x;}
             let dataToPass = CreateDataForNewEnumerable(scope);
 			
 			// Uses hashing algorithm
@@ -1046,7 +1046,7 @@ let Enumerable = (function() {
         Enumerable.prototype.In = function(items, pred, pred2) {
 			let scope = this;
 			pred = pred || function(x){return x;}
-			pred2 = pred2 || pred;
+			pred2 = pred2 || function(x){return x;}
             let dataToPass = CreateDataForNewEnumerable(scope);
 			
 			// Uses hashing algorithm

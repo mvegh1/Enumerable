@@ -319,12 +319,15 @@ let Enumerable = (function() {
 	}
 	Enumerator.prototype.Next = function(){
 		if(this.Index >= this.Data.length){
+			this.Done = true;
+			this.Current = undefined;
 			return new EnumeratorItem(undefined,true);
 		}
 		this.Index++;
 		let done = this.Index >= this.Data.length;
 		this.Done = done;
-		return new EnumeratorItem(this.Data[this.Index],done);
+		this.Current = this.Data[this.Index];
+		return new EnumeratorItem(this.Current,done);
 	}
 	function LazyEnumerator(data){
 		this.Data = data.Data;
@@ -345,6 +348,8 @@ let Enumerable = (function() {
 		while(item === InvalidItem){
 			this.Index++;
 			if(this.Index >= this.Data.length){
+				this.Current = undefined;
+				this.Done = true;
 				ResetPredicates(this.Enumerable.Predicates);
 				return new EnumeratorItem(undefined,true);
 			}			
@@ -361,6 +366,7 @@ let Enumerable = (function() {
 			}
 			let done = this.Index >= this.Data.length;
 			this.Done = done;
+			this.Current = item;
 			return new EnumeratorItem(item,done);			
         }
 	}
@@ -438,11 +444,8 @@ let Enumerable = (function() {
 				let enumerator = this.GetEnumerator();
 				return {
 					next: () => {
-						let next = enumerator.Next();
-						let value = next.Value;
-						enumerator.Current = value;
-						let done = next.Done;
-						return { value, done };
+						enumerator.Next();
+						return { value: enumerator.Current, done: enumerator.Done };
 					}
 				};
 		}

@@ -29,7 +29,6 @@ let Enumerable = (function() {
 	}
     function HashMap(pred) {
         this.Hash = new Map();
-        this.Array = [];
         this.Predicate = pred;
         let scope = this;
         this.ExtractValue = function(obj) {
@@ -51,29 +50,30 @@ let Enumerable = (function() {
 				return undefined;
 			}
 			this.Hash.set(val,obj);
-			this.Array.push(obj);
 			return val;
         }
+		this.Delete = function(obj){
+            let val  = this.ExtractValue(obj);
+			this.Hash.delete(val);			
+		}
         this.GetHashKeyOrInsertNew = function(obj) {
             let val  = this.ExtractValue(obj);
 			if(this.Hash.has(val)){
 				return val;
 			}
 			this.Hash.set(val,obj);
-			this.Array.push(obj);
 			return val;
         }
 
         // Flushes the hash and outputs as array
         this.Flush = function() {
-            let rtn = this.Array;
+            let rtn = Array.from(this.Hash.values());
             this.Clear();
             return rtn;
         }
 
         this.Clear = function() {
             scope.Hash.clear();
-            scope.Array = [];
         }
     }
 	function NestedSet(model){
@@ -132,22 +132,13 @@ let Enumerable = (function() {
 	}
 	Object.defineProperty(Dictionary.prototype, "Keys", {
 		get: function getKeys() {
-			let keys = [];
-			let kI = this._map.keys();
-			let currentKey = null;
-			while((currentKey = kI.next()).done === false){
-			   keys.push(currentKey.value);
-			}
-			return keys;
+			let rtn = Array.from(this._map.keys());
+			return rtn;
 		}
 	});
 	Object.defineProperty(Dictionary.prototype, "Values", {
 		get: function getValues() {
-			let rtn = [];
-			let keys = this.Keys;
-			for(let i = 0; i < keys.length; i++){
-				rtn.push( this._map.get(keys[i]) );
-			}
+			let rtn = Array.from(this._map.values());
 			return rtn;
 		}
 	});
@@ -451,58 +442,7 @@ let Enumerable = (function() {
 
         let WherePredicate = function(pred) {
             this.Predicate = pred;
-            this.ChainedPredicates = [new OrPredicate(pred)];
             let scope = this;
-            this.lastResult = false;
-            let initialResult = false;
-
-            function Composite(p) {
-                let clone = new WherePredicate(scope.Predicate);
-                clone.ChainedPredicates = scope.ChainedPredicates.slice();
-                clone.ChainedPredicates.push(p);
-                clone.Execute = clone.ChainedExecute;
-                return clone;
-            }
-            this.Or = function(p) {
-                return Composite(new OrPredicate(p));
-            }
-            this.And = function(p) {
-                return Composite(new AndPredicate(p));
-            }
-            this.SplitAnd = function(p) {
-                return Composite(new SplitAndPredicate(p));
-            }
-            this.SplitOr = function(p) {
-                return Composite(new SplitOrPredicate(p));
-            }
-            scope.ChainedExecute = function(item) {
-                scope.lastResult = initialResult;
-                for (let i = 0; i < scope.ChainedPredicates.length; i++) {
-                    let p = scope.ChainedPredicates[i];
-                    if (scope.lastResult === false) {
-                        //(false) && is always false
-                        if (p instanceof SplitAndPredicate) {
-                            return InvalidItem;
-                        }
-                        //(false && ) may not be false if there is a || following
-                        else if (p instanceof AndPredicate) {
-                            continue;
-                        }
-                    } else {
-                        //(true) || is always true
-                        if (p instanceof SplitOrPredicate) {
-                            return item;
-                        }
-                        //(true || ) may be false if there is an &&. ex: ((true || false) && false)
-                        else if (p instanceof OrPredicate) {
-                            continue;
-                        }
-                    }
-                    scope.lastResult = p.Execute(scope.lastResult, item);
-
-                }
-                return scope.lastResult ? item : InvalidItem;
-            }
             this.Execute = function(item) {
                 let passed = this.Predicate(item);
                 if (passed) {
@@ -519,9 +459,9 @@ let Enumerable = (function() {
                 Predicates: scope.Predicates,
                 ForEachActionStack: scope.ForEachActionStack
             };
-            if (!pred) {
+            if (pred === undefined) {
                 pred = function(item) {
-                    return false;
+                    return true;
                 }
             }
             data.WherePredicate = new WherePredicate(pred);
@@ -854,7 +794,7 @@ let Enumerable = (function() {
         Enumerable.prototype.IndexOf = function(item) {
 			let scope = this;
             let pred = function(x) {
-                return x == item;
+                return x === item;
             }
             let p = new FirstPredicate(pred);
             return p.Execute(scope).Index;
@@ -916,15 +856,6 @@ let Enumerable = (function() {
             }
             let p = new AllPredicate(pred);
             return p.Execute(scope);
-        }
-        Enumerable.prototype.Contains = function(item) {
-			let scope = this;
-            return scope.IndexOf(item) > -1;
-        }
-        Enumerable.prototype.Except = function(items) {
-			let scope = this;
-            let itemArr = ParseDataAsArray(items);
-            return scope.Where(x => itemArr.indexOf(x) == -1);
         }
         Enumerable.prototype.Not = function(pred) {
 			let scope = this;
@@ -1058,7 +989,79 @@ let Enumerable = (function() {
             }
             return new Enumerable(data);
         }
-        Enumerable.prototype.Concat = function(items) {
+         Enumerable.prototype.Contains = function(item) {
+			let scope = this;
+            return scope.IndexOf(item) > -1;
+        }
+        Enumerable.prototype.Except = function(items, pred) {
+			let scope = this;
+            let dataToPass = CreateDataForNewEnumerable(scope);
+			
+			// Uses hashing algorithm
+            dataToPass.NewForEachAction = function(arr) {
+				if(arr.length == 0){
+					return arr;
+				}
+                let data2 = ParseDataAsArray(items);
+				const set = new HashMap(pred);
+				const lenA = arr.length;
+				const lenB = data2.length;
+				
+				for (let i = 0; i < lenA; i++) {
+					const item = arr[i];
+					set.TryAdd(item);
+				}
+				
+				for (let i = 0; i < lenB; i++) {
+					const item = data2[i];
+					if(set.Contains(item)){
+						set.Delete(item);
+					}
+				}
+				
+				let rtn = set.Flush();
+				return rtn;
+		
+            }
+            return new Enumerable(dataToPass);
+        }
+        Enumerable.prototype.In = function(items, pred) {
+			let scope = this;
+            let dataToPass = CreateDataForNewEnumerable(scope);
+			
+			// Uses hashing algorithm
+            dataToPass.NewForEachAction = function(arr) {
+				if(arr.length == 0){
+					return arr;
+				}
+                let data2 = ParseDataAsArray(items);
+				const set = new HashMap(pred);
+				const lenA = arr.length;
+				const lenB = data2.length;
+				
+				for (let i = 0; i < lenB; i++) {
+					const item = data2[i];
+					set.TryAdd(item);
+				}
+				
+				const set2 = new HashMap(pred);
+				for (let i = 0; i < lenA; i++) {
+					const item = arr[i];
+					if(set.Contains(item)){
+						set2.TryAdd(item);
+					}
+				}
+				
+				set.Clear();
+				let rtn = set2.Flush();
+				return rtn;
+		
+            }
+            return new Enumerable(dataToPass);
+        }
+       
+		
+		Enumerable.prototype.Concat = function(items) {
 			let scope = this;
             let data = {
                 Data: scope.Data,

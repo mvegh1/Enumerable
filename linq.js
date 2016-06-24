@@ -993,8 +993,10 @@ let Enumerable = (function() {
 			let scope = this;
             return scope.IndexOf(item) > -1;
         }
-        Enumerable.prototype.Except = function(items, pred) {
+        Enumerable.prototype.Except = function(items, pred, pred2) {
 			let scope = this;
+			pred = pred || function(x){return x;}
+			pred2 = pred2 || pred;
             let dataToPass = CreateDataForNewEnumerable(scope);
 			
 			// Uses hashing algorithm
@@ -1014,7 +1016,8 @@ let Enumerable = (function() {
 				
 				for (let i = 0; i < lenB; i++) {
 					const item = data2[i];
-					if(set.Contains(item)){
+					const val = pred2(item);
+					if(set.ContainsFromExtractedValue(val)){
 						set.Delete(item);
 					}
 				}
@@ -1025,8 +1028,10 @@ let Enumerable = (function() {
             }
             return new Enumerable(dataToPass);
         }
-        Enumerable.prototype.In = function(items, pred) {
+        Enumerable.prototype.In = function(items, pred, pred2) {
 			let scope = this;
+			pred = pred || function(x){return x;}
+			pred2 = pred2 || pred;
             let dataToPass = CreateDataForNewEnumerable(scope);
 			
 			// Uses hashing algorithm
@@ -1035,7 +1040,7 @@ let Enumerable = (function() {
 					return arr;
 				}
                 let data2 = ParseDataAsArray(items);
-				const set = new HashMap(pred);
+				const set = new HashMap(pred2);
 				const lenA = arr.length;
 				const lenB = data2.length;
 				
@@ -1047,7 +1052,8 @@ let Enumerable = (function() {
 				const set2 = new HashMap(pred);
 				for (let i = 0; i < lenA; i++) {
 					const item = arr[i];
-					if(set.Contains(item)){
+					const val = pred(item);
+					if(set.ContainsFromExtractedValue(val)){
 						set2.TryAdd(item);
 					}
 				}

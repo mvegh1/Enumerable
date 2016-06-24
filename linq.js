@@ -130,18 +130,14 @@ let Enumerable = (function() {
     function Dictionary(){
 		this._map = new Map();
 	}
-	Object.defineProperty(Dictionary.prototype, "Keys", {
-		get: function getKeys() {
-			let rtn = Array.from(this._map.keys());
-			return ParseDataAsEnumerable(rtn);
-		}
-	});
-	Object.defineProperty(Dictionary.prototype, "Values", {
-		get: function getValues() {
-			let rtn = Array.from(this._map.values());
-			return ParseDataAsEnumerable(rtn);
-		}
-	});
+	Dictionary.prototype.GetKeys = function() {
+		let rtn = Array.from(this._map.keys());
+		return ParseDataAsEnumerable(rtn);
+	}
+	Dictionary.prototype.GetValues = function() {
+		let rtn = Array.from(this._map.values());
+		return ParseDataAsEnumerable(rtn);
+	}
 	Dictionary.prototype.ForEach = function(action){
 		let scope = this;
 		let keys = scope.Keys.ToArray();
@@ -199,6 +195,9 @@ let Enumerable = (function() {
 	Dictionary.prototype.ToEnumerable = function(){
 		let arr = this.ToArray();
 		return ParseDataAsEnumerable(arr);
+	}
+	Dictionary.prototype.GetEnumerator = function(){
+		return new MapEnumerator(this._map);
 	}
 	function Lookup(){
 		Dictionary.apply(this,[]);
@@ -306,16 +305,15 @@ let Enumerable = (function() {
     }
 	
 
-
+	function EnumeratorItem(val,done){
+		this.Value = val;
+		this.Done = done;
+	}
 	function Enumerator(data){
 		this.Data = data;
 		this.Index = -1;
 		this.Current = undefined;
 		this.Done = false;
-	}
-	function EnumeratorItem(val,done){
-		this.Value = val;
-		this.Done = done;
 	}
 	Enumerator.prototype.Next = function(){
 		if(this.Index >= this.Data.length){
@@ -369,7 +367,50 @@ let Enumerable = (function() {
 			this.Current = item;
 			return new EnumeratorItem(item,done);			
         }
+	}	
+	function IteratorEnumerator(iterator){
+		this.Iterator = iterator;
+		this.Index = -1;
+		this.Current = undefined;
+		this.Done = false;
 	}
+	IteratorEnumerator.prototype.Next = function(){
+		if(this.Done === true){
+			return new EnumeratorItem(this.Current,this.Done);
+		}
+		let next = this.Iterator.next();
+		this.Done = next.done;
+		this.Current = next.value;
+		return new EnumeratorItem(this.Current,this.Done);		
+	} 
+	function MapEnumerator(source){
+		this.Data = source;
+		this.Index = -1;
+		this.Current = undefined;
+		this.Done = false;	
+		this.KeyIterator;
+	}
+	MapEnumerator.prototype.Next = function(){
+		if(this.Index === -1){
+			this.KeyIterator = new IteratorEnumerator(this.Data.keys());
+		}
+		if(this.Done === true){
+			return new EnumeratorItem(this.Current,this.Done);
+		}
+		this.Index++;
+		let next = this.KeyIterator.Next();
+		if(next.Value === undefined){
+			this.Current = undefined;
+			this.Done = true;
+			return new EnumeratorItem(this.Current,this.Done);
+		}
+		
+		this.Done = next.Done;
+		let val = this.Data.get(next.Value);
+		this.Current = new KeyValuePair(next.Value, val);
+		return new EnumeratorItem(this.Current,this.Done);		
+	}
+ 
    // The private constructor. Define EVERYTHING in here
     let Enumerable = function(privateData) {
         let scope = this;

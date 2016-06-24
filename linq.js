@@ -861,10 +861,11 @@ let Enumerable = (function() {
 			let scope = this;
             return scope.Where(x => !pred(x));
         }
-        let UnionPredicate = function(items, pred) {
+        let UnionPredicate = function(items, pred, pred2) {
             let scope = this;
             this.Items = items;
-            this.Predicate = pred;
+            this.Predicate = pred || function(x){return x;}
+			this.Predicate2 = pred2 || this.Predicate;
             this.Reset = function() {}
             this.Execute = function(arr) {
                 let items = ParseDataAsArray(scope.Items);
@@ -873,15 +874,25 @@ let Enumerable = (function() {
                     let item = arr[i];
                     hash.TryAdd(item);
                 }
+				let rtn = [];
+				let hash2 = new HashMap(pred2);
+				
                 for (let i = 0; i < items.length; i++) {
                     let item = items[i];
-                    hash.TryAdd(item);
+					let val = this.Predicate2(item);
+					if(hash.ContainsFromExtractedValue(val) === false){
+						let v = hash2.TryAdd(item);
+						if(v !== undefined){
+							rtn.push(item);
+						}
+					}
                 }
                 let flush = hash.Flush();
+				flush = flush.concat(rtn);
                 return flush;
             }
         }
-        Enumerable.prototype.Union = function(items, pred) {
+        Enumerable.prototype.Union = function(items, pred, pred2) {
 			let scope = this;
             let data = {
                 Data: scope.Data,
@@ -889,21 +900,22 @@ let Enumerable = (function() {
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                let p = new UnionPredicate(items, pred);
+                let p = new UnionPredicate(items, pred, pred2);
                 return p.Execute(arr);
             }
             return new Enumerable(data);
         }
-        let IntersectPredicate = function(items, pred) {
+        let IntersectPredicate = function(items, pred, pred2) {
             let scope = this;
             this.Items = items;
-            this.Predicate = pred;
+            this.Predicate = pred || function(x){return x;}
+			this.Predicate2 = pred2 || this.Predicate;
             this.Reset = function() {}
             this.Execute = function(arr) {
                 let rtn = [];
                 let items = ParseDataAsArray(scope.Items);
                 let hash1 = new HashMap(pred);
-                let hash2 = new HashMap(pred);
+                let hash2 = new HashMap(pred2);
                 for (let i = 0; i < arr.length; i++) {
                     let item = arr[i];
                     hash1.TryAdd(item);
@@ -926,7 +938,7 @@ let Enumerable = (function() {
                 return rtn;
             }
         }
-        Enumerable.prototype.Intersect = function(items, pred) {
+        Enumerable.prototype.Intersect = function(items, pred, pred2) {
 			let scope = this;
             let data = {
                 Data: scope.Data,
@@ -934,15 +946,16 @@ let Enumerable = (function() {
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                let p = new IntersectPredicate(items, pred);
+                let p = new IntersectPredicate(items, pred, pred2);
                 return p.Execute(arr);
             }
             return new Enumerable(data);
         }
-        let DisjointPredicate = function(items, pred) {
+        let DisjointPredicate = function(items, pred, pred2) {
             let scope = this;
             this.Items = items;
-            this.Predicate = pred;
+            this.Predicate = pred || function(x){return x;}
+			this.Predicate2 = pred2 || this.Predicate;
             this.Reset = function() {}
             this.Execute = function(arr) {
 				let setA = arr;
@@ -955,28 +968,30 @@ let Enumerable = (function() {
 				}
 
 				for(let i=0; i < setB.length;i++){
-				   var item = setB[i];
-				   if(hash.Contains(item) === false){
+				   let item = setB[i];
+				   let val = this.Predicate2(item);
+				   if(hash.ContainsFromExtractedValue(val) === false){
 					   rtn.push(item);
 				   }
 				}
 
-				hash = new HashMap(pred);
+				hash = new HashMap(pred2);
 				for(let i = 0; i < setB.length; i++){
 				   let item = setB[i];
 				  hash.TryAdd(item);
 				}
 
 				for(let i=0; i < setA.length;i++){
-				   var item = setA[i];
-				   if(hash.Contains(item) === false){
+				   let item = setA[i];
+				   let val = this.Predicate(item);
+				   if(hash.ContainsFromExtractedValue(val) === false){
 					   rtn.push(item);
 				   }
 				}
 				return rtn;
             }
         }
-        Enumerable.prototype.Disjoint = function(items, pred) {
+        Enumerable.prototype.Disjoint = function(items, pred, pred2) {
 			let scope = this;
             let data = {
                 Data: scope.Data,
@@ -984,7 +999,7 @@ let Enumerable = (function() {
                 ForEachActionStack: scope.ForEachActionStack
             };
             data.NewForEachAction = function(arr) {
-                let p = new DisjointPredicate(items, pred);
+                let p = new DisjointPredicate(items, pred, pred2);
                 return p.Execute(arr);
             }
             return new Enumerable(data);

@@ -7,6 +7,12 @@ let Enumerable = (function() {
     let InvalidItem;
 	
     // Private Classes for module
+	function Reconstructable(){
+		let Arguments = Array.from(arguments);
+		this.Reconstruct = function(){
+		  return Reflect.construct(this.constructor,Arguments);
+		}
+	}
     function GroupInternal(key) {
         this.Key = key;
         this.Items = [];
@@ -256,12 +262,11 @@ let Enumerable = (function() {
 		});
 
     }
-	
 	function CreateDataForNewEnumerable(enumerable){
 		let scope = enumerable;
 		let dataToPass = {
 			Data: scope.Data,
-			Predicates: scope.Predicates,
+			Predicates: ReconstructPredicates(scope.Predicates),
 			ForEachActionStack: scope.ForEachActionStack
 		};	
 		return dataToPass;
@@ -272,6 +277,10 @@ let Enumerable = (function() {
             pred.Reset();
         }
     }
+	function ReconstructPredicates(Predicates){
+		let rtn = ParseDataAsEnumerable(Predicates).Select(x=>x.Reconstruct()).ToArray();
+		return rtn;
+	}
 
     function ProcessPredicatesNoReturn(Predicates, data, terminatingCondition) {
         ResetPredicates(Predicates);
@@ -316,20 +325,20 @@ let Enumerable = (function() {
 		this.Done = false;
 	}
 	Enumerator.prototype.Next = function(){
-		if(this.Index >= this.Data.length){
+		if(this.Index >= this.Data.length - 1){
 			this.Done = true;
 			this.Current = undefined;
 			return new EnumeratorItem(undefined,true);
 		}
 		this.Index++;
-		let done = this.Index >= this.Data.length;
+		let done = this.Index >= this.Data.length - 1;
 		this.Done = done;
 		this.Current = this.Data[this.Index];
 		return new EnumeratorItem(this.Current,done);
 	}
 	function LazyEnumerator(data){
 		this.Data = data.Data;
-		this.Enumerable = data;
+		this.Enumerable = data.Clone();
 		this.Index = -1;
 		this.Current = undefined;
 		this.Done = false;
@@ -338,14 +347,14 @@ let Enumerable = (function() {
 		if(this.Index === -1){
             this.Data = this.Enumerable.ForEachActionStack[this.Enumerable.ForEachActionStack.length - 1](this.Data);		
 		}
-		if(this.Index >= this.Data.length){
+		if(this.Index >= this.Data.length - 1){
 			ResetPredicates(this.Enumerable.Predicates);
 			return new EnumeratorItem(undefined,true);
 		}
 		let item = InvalidItem;
 		while(item === InvalidItem){
 			this.Index++;
-			if(this.Index >= this.Data.length){
+			if(this.Index >= this.Data.length - 1){
 				this.Current = undefined;
 				this.Done = true;
 				ResetPredicates(this.Enumerable.Predicates);
@@ -362,7 +371,7 @@ let Enumerable = (function() {
 			if (item === InvalidItem) {
 				continue;
 			}
-			let done = this.Index >= this.Data.length;
+			let done = this.Index >= this.Data.length - 1;
 			this.Done = done;
 			this.Current = item;
 			return new EnumeratorItem(item,done);			
@@ -543,6 +552,7 @@ let Enumerable = (function() {
         }
 
         let WherePredicate = function(pred) {
+			Reconstructable.apply(this,arguments);
             this.Predicate = pred;
             let scope = this;
             this.Execute = function(item) {
@@ -570,6 +580,7 @@ let Enumerable = (function() {
             return new FilteredEnumerable(data);
         }
         let SelectPredicate = function(pred) {
+			Reconstructable.apply(this,arguments);
             this.Predicate = pred;
             this.Execute = function(item) {
                 return this.Predicate(item)
@@ -611,7 +622,8 @@ let Enumerable = (function() {
             return new Enumerable(data);
         }
         let DistinctPredicate = function(pred) {
-            this.Hash = new HashMap(pred);
+ 			Reconstructable.apply(this,arguments);           
+			this.Hash = new HashMap(pred);
             this.Predicate = function(item) {
                 // returns undefined in failed, otherwise returns the item
                 let result = this.Hash.TryAdd(item);
@@ -636,7 +648,8 @@ let Enumerable = (function() {
             return new Enumerable(data);
         }
         let SkipPredicate = function(cnt) {
-            this.Skipped = 0;
+ 			Reconstructable.apply(this,arguments);           
+			this.Skipped = 0;
             this.SkipCount = cnt;
             this.Predicate = function(item) {
                 if (this.Skipped < this.SkipCount) {
@@ -663,7 +676,8 @@ let Enumerable = (function() {
             return new Enumerable(data);
         }
         let SkipWhilePredicate = function(pred) {
-            this.CanSkip = true;
+  			Reconstructable.apply(this,arguments);         
+		   this.CanSkip = true;
             this._predicate = pred;
             this.Predicate = function(item) {
                 if (!this.CanSkip) {
@@ -693,6 +707,7 @@ let Enumerable = (function() {
             return new Enumerable(data);
         }
         let TakePredicate = function(cnt) {
+ 			Reconstructable.apply(this,arguments);
             this.Took = 0;
             this.TakeCount = cnt;
             this.Predicate = function(item) {
@@ -720,6 +735,7 @@ let Enumerable = (function() {
             return new Enumerable(data);
         }
         let TakeWhilePredicate = function(pred) {
+ 			Reconstructable.apply(this,arguments);
             this.CanTake = true;
             this._predicate = pred;
             this.Predicate = function(item) {
@@ -813,6 +829,7 @@ let Enumerable = (function() {
             return new Enumerable(data);
         }
         let FirstPredicate = function(pred) {
+ 			Reconstructable.apply(this,arguments);
             let SCOPE = this;
             this.NULL_PRED_METHOD = function(i, v) {
                 SCOPE._first = v;
@@ -858,6 +875,7 @@ let Enumerable = (function() {
             return scope.First(pred);
         }
         let LastPredicate = function(pred) {
+			Reconstructable.apply(this,arguments);
             this.Predicate = pred;
             this._last = null;
             this._lastIndex = -1;
@@ -934,7 +952,8 @@ let Enumerable = (function() {
             return first !== null;
         }
         let AllPredicate = function(pred) {
-            this._predicate = pred;
+ 			Reconstructable.apply(this,arguments);
+           this._predicate = pred;
             this._all = true;
             let scope = this;
             this.Predicate = function(i, v) {
@@ -964,6 +983,7 @@ let Enumerable = (function() {
             return scope.Where(x => !pred(x));
         }
         let UnionPredicate = function(items, pred, pred2) {
+			Reconstructable.apply(this,arguments);
             let scope = this;
             this.Items = items;
             this.Predicate = pred || function(x){return x;}
@@ -1008,7 +1028,8 @@ let Enumerable = (function() {
             return new Enumerable(data);
         }
         let IntersectPredicate = function(items, pred, pred2) {
-            let scope = this;
+ 			Reconstructable.apply(this,arguments);
+           let scope = this;
             this.Items = items;
             this.Predicate = pred || function(x){return x;}
 			this.Predicate2 = pred2 || function(x){return x;}
@@ -1054,7 +1075,8 @@ let Enumerable = (function() {
             return new Enumerable(data);
         }
         let DisjointPredicate = function(items, pred, pred2) {
-            let scope = this;
+ 			Reconstructable.apply(this,arguments);
+           let scope = this;
             this.Items = items;
             this.Predicate = pred || function(x){return x;}
 			this.Predicate2 = pred2 || function(x){return x;}
@@ -1612,6 +1634,7 @@ let Enumerable = (function() {
             return sum;
         }
         let MaxPredicate = function(pred, level) {
+			Reconstructable.apply(this,arguments);
             this.Level = level || 0;
             this.Predicate = pred;
             this.MaxFirst = function(SCOPE) {
@@ -1711,6 +1734,7 @@ let Enumerable = (function() {
             return maxPred.MaxBy(scope);
         }
         let MinPredicate = function(pred, level) {
+			Reconstructable.apply(this,arguments);
             this.Level = level || 0;
             this.Predicate = pred;
             this.MinFirst = function(SCOPE) {
@@ -1962,7 +1986,8 @@ let Enumerable = (function() {
             return new Enumerable(data);
         }
         let CatchPredicate = function(handler, refPred) {
-            this.Handler = handler;
+ 			Reconstructable.apply(this,arguments);
+           this.Handler = handler;
             this.HandledPredicate = refPred;
             this.Predicate = function(item) {
                 try {
@@ -1989,7 +2014,8 @@ let Enumerable = (function() {
             return new Enumerable(data);
         }
         let TracePredicate = function(msg) {
-            this.Message = msg;
+ 			Reconstructable.apply(this,arguments);
+           this.Message = msg;
             this.Predicate = function(item) {
                 console.log(this.Message, ":", item);
                 return item;
@@ -2027,11 +2053,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Clone = function() {
 			let scope = this;
-            let privData = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let privData = CreateDataForNewEnumerable(scope);
             return new Enumerable(privData)
         }
         Enumerable.prototype.SequenceEqual = function(other,comparer) {

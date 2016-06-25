@@ -133,7 +133,8 @@ let Enumerable = (function() {
 			this.Map.clear();
 		}
 	}
-    function Dictionary(){
+    
+	function Dictionary(){
 		this._map = new Map();
 	}
 	Dictionary.prototype.GetKeys = function() {
@@ -146,12 +147,12 @@ let Enumerable = (function() {
 	}
 	Dictionary.prototype.ForEach = function(action){
 		let scope = this;
-		let keys = scope.Keys.ToArray();
+		let keys = scope.GetKeys().ToArray();
 		for(let i = 0; i < keys.length; i++){
 			let key = keys[i];
 			let val = scope._map.get(key);
 			let kvp = new KeyValuePair(key,val);
-			let result = action(kvp);
+			let result = action(i,kvp);
 			if(result === false){
 				break;
 			}
@@ -163,7 +164,7 @@ let Enumerable = (function() {
 	Dictionary.prototype.ContainsValue = function(val){
 		let scope = this;
 		let result = false;
-		scope.ForEach( function(kvp){
+		scope.ForEach( function(i,kvp){
 			if(kvp.Value === val){
 				result = true;
 				return false;
@@ -177,6 +178,10 @@ let Enumerable = (function() {
 			throw new Error("Dictionary does not contain the given key: " + key);
 		}
 		return scope._map.get(key);
+	}
+	Dictionary.prototype.Set = function(key,value){
+		let scope = this;
+		scope._map.set(key,value);
 	}
 	Dictionary.prototype.Add = function(key,value){
 		let scope = this;
@@ -193,7 +198,7 @@ let Enumerable = (function() {
 	}
 	Dictionary.prototype.ToArray = function(){
 		let arr = [];
-		this.ForEach(kvp => {
+		this.ForEach( (i, kvp) => {
 			arr.push(kvp);
 		});
 		return arr;		
@@ -205,6 +210,16 @@ let Enumerable = (function() {
 	Dictionary.prototype.GetEnumerator = function(){
 		return new MapEnumerator(this._map);
 	}
+	Dictionary.prototype[Symbol.iterator] = function () {
+			let enumerator = this.GetEnumerator();
+			return {
+				next: () => {
+					enumerator.Next();
+					return { value: enumerator.Current, done: enumerator.Done };
+				}
+			};
+	}
+	
 	function Lookup(){
 		Dictionary.apply(this,[]);
 		let scope = this;
@@ -228,92 +243,12 @@ let Enumerable = (function() {
 		}
 		scope._map.get(key).Data.push(value);
 	}	
+	Lookup.prototype.Set = function(key,value){
+		let scope = this;
+		let val = ParseDataAsEnumerable(value);
+		scope._map.set(key,val);
+	}	
 	
-	// the module API
-    function PublicEnumerable(data) {
-        let d = ParseDataAsArray(data);
-        return new Enumerable({
-            Data: d
-        });
-    }
-    // Private functions across module
-    function ParseDataAsArray(data) {
-        if (data.hasOwnProperty("length")) {
-            return data;
-        }
-        if (data.ToArray) {
-            return data.ToArray();
-        }
-        return Array.from(data);
-    }
-
-    function ParseDataAsEnumerable(data) {
-        if (data.hasOwnProperty("length")) {
-            return new Enumerable({
-                Data: data
-            });
-        }
-        if (data.ToArray) {
-            return data;
-        }
-
-		return new Enumerable({
-			Data: Array.from(data)
-		});
-
-    }
-	function CreateDataForNewEnumerable(enumerable){
-		let scope = enumerable;
-		let dataToPass = {
-			Data: scope.Data,
-			Predicates: ReconstructPredicates(scope.Predicates),
-			ForEachActionStack: scope.ForEachActionStack
-		};	
-		return dataToPass;
-	}
-    function ResetPredicates(Predicates) {
-        for (let i = 0; i < Predicates.length; i++) {
-            let pred = Predicates[i];
-            pred.Reset();
-        }
-    }
-	function ReconstructPredicates(Predicates){
-		let rtn = ParseDataAsEnumerable(Predicates).Select(x=>x.Reconstruct()).ToArray();
-		return rtn;
-	}
-
-    function ProcessPredicatesNoReturn(Predicates, data, terminatingCondition) {
-        ResetPredicates(Predicates);
-
-        // No action was specified
-        if (!terminatingCondition) {
-            return;
-        }
-
-        let idx = -1;
-        for (let len = data.length, i = 0; i !== len; i++) {
-            let item = data[i];
-            for (let j = 0, len2 = Predicates.length; j != len2; j++) {
-                let Predicate = Predicates[j];
-                item = Predicate.Execute(item);
-                if (item === InvalidItem) {
-                    break;
-                }
-            }
-            if (item === InvalidItem) {
-                continue;
-            }
-            idx++;
-            if (terminatingCondition(idx, item) === false) {
-                return;
-            }
-
-        }
-        ResetPredicates(Predicates);
-        return;
-    }
-	
-
 	function EnumeratorItem(val,done){
 		this.Value = val;
 		this.Done = done;
@@ -325,13 +260,13 @@ let Enumerable = (function() {
 		this.Done = false;
 	}
 	Enumerator.prototype.Next = function(){
-		if(this.Index >= this.Data.length - 1){
+		if(this.Index >= this.Data.length){
 			this.Done = true;
 			this.Current = undefined;
 			return new EnumeratorItem(undefined,true);
 		}
 		this.Index++;
-		let done = this.Index >= this.Data.length - 1;
+		let done = this.Index >= this.Data.length;
 		this.Done = done;
 		this.Current = this.Data[this.Index];
 		return new EnumeratorItem(this.Current,done);
@@ -347,14 +282,14 @@ let Enumerable = (function() {
 		if(this.Index === -1){
             this.Data = this.Enumerable.ForEachActionStack[this.Enumerable.ForEachActionStack.length - 1](this.Data);		
 		}
-		if(this.Index >= this.Data.length - 1){
+		if(this.Index >= this.Data.length){
 			ResetPredicates(this.Enumerable.Predicates);
 			return new EnumeratorItem(undefined,true);
 		}
 		let item = InvalidItem;
 		while(item === InvalidItem){
 			this.Index++;
-			if(this.Index >= this.Data.length - 1){
+			if(this.Index >= this.Data.length){
 				this.Current = undefined;
 				this.Done = true;
 				ResetPredicates(this.Enumerable.Predicates);
@@ -371,7 +306,7 @@ let Enumerable = (function() {
 			if (item === InvalidItem) {
 				continue;
 			}
-			let done = this.Index >= this.Data.length - 1;
+			let done = this.Index >= this.Data.length;
 			this.Done = done;
 			this.Current = item;
 			return new EnumeratorItem(item,done);			
@@ -419,7 +354,90 @@ let Enumerable = (function() {
 		this.Current = new KeyValuePair(next.Value, val);
 		return new EnumeratorItem(this.Current,this.Done);		
 	}
- 
+ 	
+    // Private functions across module
+    function ParseDataAsArray(data) {
+        if (data.hasOwnProperty("length")) {
+            return data;
+        }
+        if (data.ToArray !== undefined) {
+            return data.ToArray();
+        }
+        return Array.from(data);
+    }
+    function ParseDataAsEnumerable(data) {
+        if (data.hasOwnProperty("length")) {
+            return new Enumerable({
+                Data: data
+            });
+        }
+		// This supports Enumerable,Dictionary,and Lookup
+        if (data.ToEnumerable !== undefined) {
+            return data.ToEnumerable();
+        }
+
+		return new Enumerable({
+			Data: Array.from(data)
+		});
+
+    }
+	function CreateDataForNewEnumerable(enumerable){
+		let scope = enumerable;
+		let dataToPass = {
+			Data: scope.Data,
+			Predicates: ReconstructPredicates(scope.Predicates),
+			ForEachActionStack: scope.ForEachActionStack
+		};	
+		return dataToPass;
+	}
+    function ResetPredicates(Predicates) {
+        for (let i = 0; i < Predicates.length; i++) {
+            let pred = Predicates[i];
+            pred.Reset();
+        }
+    }
+	function ReconstructPredicates(Predicates){
+		let rtn = ParseDataAsEnumerable(Predicates).Select(x=>x.Reconstruct()).ToArray();
+		return rtn;
+	}
+    function ProcessPredicatesNoReturn(Predicates, data, terminatingCondition) {
+        ResetPredicates(Predicates);
+
+        // No action was specified
+        if (!terminatingCondition) {
+            return;
+        }
+
+        let idx = -1;
+        for (let len = data.length, i = 0; i !== len; i++) {
+            let item = data[i];
+            for (let j = 0, len2 = Predicates.length; j != len2; j++) {
+                let Predicate = Predicates[j];
+                item = Predicate.Execute(item);
+                if (item === InvalidItem) {
+                    break;
+                }
+            }
+            if (item === InvalidItem) {
+                continue;
+            }
+            idx++;
+            if (terminatingCondition(idx, item) === false) {
+                return;
+            }
+
+        }
+        ResetPredicates(Predicates);
+        return;
+    }
+
+	// the module API
+    function PublicEnumerable(data) {
+        let d = ParseDataAsArray(data);
+        return new Enumerable({
+            Data: d
+        });
+    }
    // The private constructor. Define EVERYTHING in here
     let Enumerable = function(privateData) {
         let scope = this;
@@ -440,7 +458,6 @@ let Enumerable = (function() {
         scope.AddToPredicateStack = function(pred) {
             scope.Predicates.push(pred);
         }
-
         scope.ProcessPredicates = function(Predicates, data) {
                 ResetPredicates(Predicates);
 
@@ -504,10 +521,7 @@ let Enumerable = (function() {
             return item == InvalidItem;
         }
         Enumerable.prototype.ToEnumerable = function() {
-            let arr = this.ToArray();
-            return new Enumerable({
-                Data: arr
-            });
+            return this.Clone();
         }
         Enumerable.prototype.ToArray = function() {
             let arr = this.Data;

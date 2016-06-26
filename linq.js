@@ -134,121 +134,6 @@ let Enumerable = (function() {
 		}
 	}
     
-	function Dictionary(){
-		this._map = new Map();
-	}
-	Dictionary.prototype.GetKeys = function() {
-		let rtn = Array.from(this._map.keys());
-		return ParseDataAsEnumerable(rtn);
-	}
-	Dictionary.prototype.GetValues = function() {
-		let rtn = Array.from(this._map.values());
-		return ParseDataAsEnumerable(rtn);
-	}
-	Dictionary.prototype.ForEach = function(action){
-		let scope = this;
-		let keys = scope.GetKeys().ToArray();
-		for(let i = 0; i < keys.length; i++){
-			let key = keys[i];
-			let val = scope._map.get(key);
-			let kvp = new KeyValuePair(key,val);
-			let result = action(i,kvp);
-			if(result === false){
-				break;
-			}
-		}
-	}
-	Dictionary.prototype.ContainsKey = function(key){
-		return this._map.has(key);
-	}
-	Dictionary.prototype.ContainsValue = function(val){
-		let scope = this;
-		let result = false;
-		scope.ForEach( function(i,kvp){
-			if(kvp.Value === val){
-				result = true;
-				return false;
-			}
-		});
-		return result;
-	}
-	Dictionary.prototype.Get = function(key){
-		let scope = this;
-		if(scope._map.has(key) === false){
-			throw new Error("Dictionary does not contain the given key: " + key);
-		}
-		return scope._map.get(key);
-	}
-	Dictionary.prototype.Set = function(key,value){
-		let scope = this;
-		scope._map.set(key,value);
-	}
-	Dictionary.prototype.Add = function(key,value){
-		let scope = this;
-		if(scope._map.has(key)){
-			throw new Error("Dictionary already contains the given key: " + key);
-		}
-		scope._map.set(key,value);
-	}
-	Dictionary.prototype.Clear = function(){
-		this._map.clear();
-	}
-	Dictionary.prototype.Remove = function(key){
-	    this._map.delete(key);
-	}
-	Dictionary.prototype.ToArray = function(){
-		let arr = [];
-		this.ForEach( (i, kvp) => {
-			arr.push(kvp);
-		});
-		return arr;		
-	}
-	Dictionary.prototype.ToEnumerable = function(){
-		let arr = this.ToArray();
-		return ParseDataAsEnumerable(arr);
-	}
-	Dictionary.prototype.GetEnumerator = function(){
-		return new MapEnumerator(this._map);
-	}
-	Dictionary.prototype[Symbol.iterator] = function () {
-			let enumerator = this.GetEnumerator();
-			return {
-				next: () => {
-					enumerator.Next();
-					return { value: enumerator.Current, done: enumerator.Done };
-				}
-			};
-	}
-	
-	function Lookup(){
-		Dictionary.apply(this,[]);
-		let scope = this;
-	}
-	Lookup.prototype = Object.create(Dictionary.prototype);
-	Lookup.prototype.ContainsValue = function(val){
-		let scope = this;
-		let result = false;
-		scope.ForEach( function(kvp){
-			if(kvp.Value.Contains(val) > -1){
-				result = true;
-				return false;
-			}
-		});
-		return result;
-	}
-	Lookup.prototype.Add = function(key,value){
-		let scope = this;
-		if(scope._map.has(key) === false){
-			scope._map.set(key,ParseDataAsEnumerable([]));
-		}
-		scope._map.get(key).Data.push(value);
-	}	
-	Lookup.prototype.Set = function(key,value){
-		let scope = this;
-		let val = ParseDataAsEnumerable(value);
-		scope._map.set(key,val);
-	}	
-	
 	function EnumeratorItem(val,done){
 		this.Value = val;
 		this.Done = done;
@@ -381,6 +266,11 @@ let Enumerable = (function() {
 		});
 
     }
+	function ExtendPrototype(child,parent){
+		let oldConstructor = child.constructor;
+		child = Object.create(parent);
+		child.constructor = oldConstructor;
+	}
 	function CreateDataForNewEnumerable(enumerable){
 		let scope = enumerable;
 		let dataToPass = {
@@ -397,7 +287,10 @@ let Enumerable = (function() {
         }
     }
 	function ReconstructPredicates(Predicates){
-		let rtn = ParseDataAsEnumerable(Predicates).Select(x=>x.Reconstruct()).ToArray();
+		let rtn = [];
+		for(let i = 0; i < Predicates.length; i++){
+			rtn.push( Predicates[i].Reconstruct() );
+		}
 		return rtn;
 	}
     function ProcessPredicatesNoReturn(Predicates, data, terminatingCondition) {
@@ -580,11 +473,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Where = function(pred) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             if (pred === undefined) {
                 pred = function(item) {
                     return true;
@@ -603,21 +492,13 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Select = function(pred) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewPredicate = new SelectPredicate(pred);
             return new Enumerable(data);
         }
         Enumerable.prototype.SelectMany = function(pred, selectPred) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let sPred = new SelectPredicate(pred);
                 let rtn = [];
@@ -652,11 +533,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Distinct = function(pred) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             let distinctHash = [];
             data.NewPredicate = new DistinctPredicate(pred);
             return new Enumerable(data);
@@ -681,11 +558,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Skip = function(cnt) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewPredicate = new SkipPredicate(cnt);
             return new Enumerable(data);
         }
@@ -712,11 +585,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.SkipWhile = function(pred) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewPredicate = new SkipWhilePredicate(pred);
             return new Enumerable(data);
         }
@@ -740,11 +609,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Take = function(cnt) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewPredicate = new TakePredicate(cnt);
             return new Enumerable(data);
         }
@@ -771,21 +636,13 @@ let Enumerable = (function() {
         }
        Enumerable.prototype.TakeWhile = function(pred) {
 		   let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewPredicate = new TakeWhilePredicate(pred);
             return new Enumerable(data);
         }
         Enumerable.prototype.TakeExceptLast = function(cnt) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             cnt = cnt || 1;
             data.NewForEachAction = function(arr) {
                 let newArr = [];
@@ -799,11 +656,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.TakeLast = function(cnt) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let rtn = [];
                 let idx = arr.length;
@@ -822,11 +675,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.TakeLastWhile = function(pred) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let rtn = [];
                 let idx = arr.length;
@@ -1030,11 +879,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Union = function(items, pred, pred2) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let p = new UnionPredicate(items, pred, pred2);
                 return p.Execute(arr);
@@ -1077,11 +922,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Intersect = function(items, pred, pred2) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let p = new IntersectPredicate(items, pred, pred2);
                 return p.Execute(arr);
@@ -1131,11 +972,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Disjoint = function(items, pred, pred2) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let p = new DisjointPredicate(items, pred, pred2);
                 return p.Execute(arr);
@@ -1222,11 +1059,7 @@ let Enumerable = (function() {
 		
 		Enumerable.prototype.Concat = function(items) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let itemArr = ParseDataAsArray(items);
                 let rtn = arr.concat(itemArr);
@@ -1236,11 +1069,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Prepend = function(items) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let itemArr = ParseDataAsArray(items);
                 let rtn = itemArr.concat(arr);
@@ -1250,11 +1079,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Zip = function(items, pred) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let rtn = [];
                 let itemArr = ParseDataAsArray(items);
@@ -1273,11 +1098,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.ZipUneven = function(items, pred) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let rtn = [];
                 let itemArr = ParseDataAsArray(items);
@@ -1302,11 +1123,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Reverse = function() {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let rtn = [];
                 for (let i = arr.length - 1; i > -1; i--) {
@@ -1318,11 +1135,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.GroupBy = function(pred) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.GroupingPredicate = pred;
             return new GroupedEnumerable(data);
         }
@@ -1905,11 +1718,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Choice = function(cnt) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let rtn = [];
                 for (let i = 0; i < cnt; i++) {
@@ -1922,11 +1731,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Cycle = function(cnt) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let rtn = [];
                 for (let i = 0; i < cnt; i++) {
@@ -1939,11 +1744,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Repeat = function(elm, cnt) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
                 let rtn = arr.slice();
                 for (let i = 0; i < cnt; i++) {
@@ -1972,11 +1773,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Scan = function(seed,generator) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
 				if(arr.length === 0){
 					return arr;
@@ -2041,11 +1838,7 @@ let Enumerable = (function() {
         }
         Enumerable.prototype.Trace = function(msg) {
 			let scope = this;
-            let data = {
-                Data: scope.Data,
-                Predicates: scope.Predicates,
-                ForEachActionStack: scope.ForEachActionStack
-            };
+            let data = CreateDataForNewEnumerable(scope);
             let oldPredicate = data.Predicate;
             data.NewPredicate = new TracePredicate(msg);
             return new Enumerable(data);
@@ -2324,32 +2117,135 @@ let Enumerable = (function() {
 
         this.AddToPredicateStack(WherePredicate);
 
-        function Composite(pred) {
-            // Remove the old WherePredicate from the stack
-            let preds = scope.Predicates.splice(0, scope.Predicates.length - 1);
-            let newArgs = {
-                Data: scope.Data,
-                ForEachActionStack: scope.ForEachActionStack,
-                Predicates: preds
-            };
-            newArgs.WherePredicate = pred;
-            return new FilteredEnumerable(newArgs);
-        }
-        this.Or = function(pred) {
-            return Composite(WherePredicate.Or(pred));
-        };
-        this.And = function(pred) {
-            return Composite(WherePredicate.And(pred));
-        };
-        this.SplitAnd = function(pred) {
-            return Composite(WherePredicate.SplitAnd(pred));
-        }
-        this.SplitOr = function(pred) {
-            return Composite(WherePredicate.SplitOr(pred));
-        }
     }
    
 	FilteredEnumerable.prototype = Enumerable.prototype;
+
+	function Dictionary(){
+		this._map = new Map();
+		Enumerable.apply(this,[ [] ]);
+	}
+	Dictionary.prototype = Object.create(Enumerable.prototype);
+	Object.defineProperty(Dictionary.prototype,"Data",{
+		get: function getData(){
+			return this.ToArray();
+		},
+		set: function setData(){
+			
+		}
+	});
+	Dictionary.prototype.GetKeys = function() {
+		let rtn = Array.from(this._map.keys());
+		return ParseDataAsEnumerable(rtn);
+	}
+	Dictionary.prototype.GetValues = function() {
+		let rtn = Array.from(this._map.values());
+		return ParseDataAsEnumerable(rtn);
+	}
+	Dictionary.prototype.ForEach = function(action){
+		let scope = this;
+		let keys = scope.GetKeys().ToArray();
+		for(let i = 0; i < keys.length; i++){
+			let key = keys[i];
+			let val = scope._map.get(key);
+			let kvp = new KeyValuePair(key,val);
+			let result = action(i,kvp);
+			if(result === false){
+				break;
+			}
+		}
+	}
+	Dictionary.prototype.ContainsKey = function(key){
+		return this._map.has(key);
+	}
+	Dictionary.prototype.ContainsValue = function(val){
+		let scope = this;
+		let result = false;
+		scope.ForEach( function(i,kvp){
+			if(kvp.Value === val){
+				result = true;
+				return false;
+			}
+		});
+		return result;
+	}
+	Dictionary.prototype.Get = function(key){
+		let scope = this;
+		if(scope._map.has(key) === false){
+			throw new Error("Dictionary does not contain the given key: " + key);
+		}
+		return scope._map.get(key);
+	}
+	Dictionary.prototype.Set = function(key,value){
+		let scope = this;
+		scope._map.set(key,value);
+	}
+	Dictionary.prototype.Add = function(key,value){
+		let scope = this;
+		if(scope._map.has(key)){
+			throw new Error("Dictionary already contains the given key: " + key);
+		}
+		scope._map.set(key,value);
+	}
+	Dictionary.prototype.Clear = function(){
+		this._map.clear();
+	}
+	Dictionary.prototype.Remove = function(key){
+	    this._map.delete(key);
+	}
+	Dictionary.prototype.ToArray = function(){
+		let arr = [];
+		this.ForEach( (i, kvp) => {
+			arr.push(kvp);
+		});
+		return arr;		
+	}
+	Dictionary.prototype.ToEnumerable = function(){
+		let arr = this.ToArray();
+		return ParseDataAsEnumerable(arr);
+	}
+	Dictionary.prototype.GetEnumerator = function(){
+		return new MapEnumerator(this._map);
+	}
+	Dictionary.prototype[Symbol.iterator] = function () {
+			let enumerator = this.GetEnumerator();
+			return {
+				next: () => {
+					enumerator.Next();
+					return { value: enumerator.Current, done: enumerator.Done };
+				}
+			};
+	}
+	
+	function Lookup(){
+		Dictionary.apply(this,[]);
+		let scope = this;
+	}
+	Lookup.prototype = Object.create(Dictionary.prototype);
+	Lookup.prototype.ContainsValue = function(val){
+		let scope = this;
+		let result = false;
+		scope.ForEach( function(kvp){
+			if(kvp.Value.Contains(val) > -1){
+				result = true;
+				return false;
+			}
+		});
+		return result;
+	}
+	Lookup.prototype.Add = function(key,value){
+		let scope = this;
+		if(scope._map.has(key) === false){
+			scope._map.set(key,ParseDataAsEnumerable([]));
+		}
+		scope._map.get(key).Data.push(value);
+	}	
+	Lookup.prototype.Set = function(key,value){
+		let scope = this;
+		let val = ParseDataAsEnumerable(value);
+		scope._map.set(key,val);
+	}	
+	
 	
     PublicEnumerable.prototype.Extend = function(extenderMethod) {
             extenderMethod(Enumerable.prototype);

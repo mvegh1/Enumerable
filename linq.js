@@ -2229,7 +2229,7 @@ let Enumerable = (function() {
 	}	
 	
 	// Static methods for Enumerable
-    PublicEnumerable.prototype.Extend = function(extenderMethod) {
+    PublicEnumerable.Extend = function(extenderMethod) {
             extenderMethod(Enumerable.prototype);
         }
         // The preferred smart constructor
@@ -2289,6 +2289,15 @@ let Enumerable = (function() {
 				let enumerable = ParseDataAsEnumerable(data);
 				return enumerable[prop].apply(enumerable, Array.from(arguments));
 			}
+		}
+		object.prototype[Symbol.iterator] = function () {
+			let enumerator = this.GetEnumerator();
+			return {
+				next: () => {
+					enumerator.Next();
+					return { value: enumerator.Current, done: enumerator.Done };
+				}
+			};
 		}
 	}
         // Internal Utilities

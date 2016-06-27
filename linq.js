@@ -13,7 +13,6 @@ let Enumerable = (function() {
 		  return Reflect.construct(this.constructor,Arguments);
 		}
 	}
-	
     function GroupInternal(key) {
         this.Key = key;
         this.Items = [];
@@ -22,34 +21,6 @@ let Enumerable = (function() {
 		this.Key = key;
 		this.Items = ParseDataAsEnumerable(data);
 	}
-	Group.prototype.Sum = function(){
-		return this.Items.Sum.apply(this.Items, Array.from(arguments));
-	}
-	Group.prototype.Average = function(){
-		return this.Items.Average.apply(this.Items, Array.from(arguments));
-	}
-	Group.prototype.Max = function(){
-		return this.Items.Max.apply(this.Items, Array.from(arguments));
-	}	
-	Group.prototype.Min = function(){
-		return this.Items.Min.apply(this.Items, Array.from(arguments));
-	}
-	Group.prototype.Count = function(){
-		return this.Items.Count.apply(this.Items, Array.from(arguments));
-	}
-	Group.prototype.Variance = function(){
-		return this.Items.Variance.apply(this.Items, Array.from(arguments));
-	}
-	Group.prototype.StdDev = function(){
-		return this.Items.StdDev.apply(this.Items, Array.from(arguments));
-	}
-	Group.prototype.First = function(){
-		return this.Items.First.apply(this.Items, Array.from(arguments));
-	}
-	Group.prototype.Last = function(){
-		return this.Items.Last.apply(this.Items, Array.from(arguments));
-	}
-	
 	function Range(min,max){
 		this.Min = min;
 		this.Max = max;
@@ -2075,8 +2046,6 @@ let Enumerable = (function() {
         Enumerable.apply(this, argsToApply);
         // Private variables for module
         let GroupingPredicates = privateData.GroupingPredicate;
-
-		let HavingFunc = function(arr){return arr;}
 		
         let GroupingFunc = function(arr) {
             if (arr.length === 0) {
@@ -2107,27 +2076,11 @@ let Enumerable = (function() {
 				groups[i] = new Group(group.Key,group.Items);
 			}
 			set.clear();
-            return HavingFunc(groups);
+            return groups;
         }
         this.AddToForEachStack(function(arr) {
             return GroupingFunc(arr);
         });
-		this.Having = function(pred){
-			let oldHaving = HavingFunc;
-			HavingFunc = function(arr){
-				arr = oldHaving(arr);
-				let newArr = [];
-				for(let i = 0; i < arr.length; i++){
-					let group = arr[i];
-					let items = group.Items;
-					if(pred(items) === true){ 
-						newArr.push(group);
-					}
-				}
-				return newArr;
-			}
-			return this;
-		}
     };
 	
 	GroupedEnumerable.prototype = Enumerable.prototype;
@@ -2275,7 +2228,7 @@ let Enumerable = (function() {
 		scope._map.set(key,val);
 	}	
 	
-	
+	// Static methods for Enumerable
     PublicEnumerable.prototype.Extend = function(extenderMethod) {
             extenderMethod(Enumerable.prototype);
         }
@@ -2371,7 +2324,15 @@ let Enumerable = (function() {
                 }
                 return newSort(a, b);
             }
-        }
+    }
+	
+	// Misc code
+	for(let prop in Enumerable.prototype){
+		Group.prototype[prop] = function(){
+			return this.Items[prop].apply(this.Items, Array.from(arguments));			
+		}
+	}
+	
         // Create a short-hand, plus NoConflict
     let _Old = window._;
     window._ = PublicEnumerable;

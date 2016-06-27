@@ -2278,6 +2278,19 @@ let Enumerable = (function() {
 		}
 		return ParseDataAsEnumerable(arr);
 	}
+	PublicEnumerable.Inherit = function(object, dataGetter){
+		for(let prop in Enumerable.prototype){
+			
+			if(typeof Enumerable.prototype[prop] !== "function"){
+				continue;
+			}
+			object.prototype[prop] = function(){
+				let data = dataGetter(this);
+				let enumerable = ParseDataAsEnumerable(data);
+				return enumerable[prop].apply(enumerable, Array.from(arguments));
+			}
+		}
+	}
         // Internal Utilities
     Enumerable.Functions = {};
     Enumerable.Functions.SortAsc = function(a, b) {
@@ -2332,6 +2345,7 @@ let Enumerable = (function() {
 			return this.Items[prop].apply(this.Items, Array.from(arguments));			
 		}
 	}
+	
 	
         // Create a short-hand, plus NoConflict
     let _Old = window._;

@@ -13,6 +13,7 @@ let Enumerable = (function() {
 		  return Reflect.construct(this.constructor,Arguments);
 		}
 	}
+	
     function GroupInternal(key) {
         this.Key = key;
         this.Items = [];
@@ -21,6 +22,34 @@ let Enumerable = (function() {
 		this.Key = key;
 		this.Items = ParseDataAsEnumerable(data);
 	}
+	Group.prototype.Sum = function(){
+		return this.Items.Sum.apply(this.Items, Array.from(arguments));
+	}
+	Group.prototype.Average = function(){
+		return this.Items.Average.apply(this.Items, Array.from(arguments));
+	}
+	Group.prototype.Max = function(){
+		return this.Items.Max.apply(this.Items, Array.from(arguments));
+	}	
+	Group.prototype.Min = function(){
+		return this.Items.Min.apply(this.Items, Array.from(arguments));
+	}
+	Group.prototype.Count = function(){
+		return this.Items.Count.apply(this.Items, Array.from(arguments));
+	}
+	Group.prototype.Variance = function(){
+		return this.Items.Variance.apply(this.Items, Array.from(arguments));
+	}
+	Group.prototype.StdDev = function(){
+		return this.Items.StdDev.apply(this.Items, Array.from(arguments));
+	}
+	Group.prototype.First = function(){
+		return this.Items.First.apply(this.Items, Array.from(arguments));
+	}
+	Group.prototype.Last = function(){
+		return this.Items.Last.apply(this.Items, Array.from(arguments));
+	}
+	
 	function Range(min,max){
 		this.Min = min;
 		this.Max = max;

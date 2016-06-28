@@ -1172,19 +1172,25 @@ let Enumerable = (function() {
 		Enumerable.prototype.SplitBy = function(sequence, pred, includeSplitter) {
 			let scope = this;
             let data = CreateDataForNewEnumerable(scope);
+			function concat(a,b){
+				for(let i = 0; i < b.length; i++){
+					a.push(b[i]);
+				}
+			}
             data.NewForEachAction = function(arr) {
                 let rtn = [];
 				sequence = ParseDataAsArray(sequence);
 				let currentGroup = [];
 				let currentSequence = [];
                 for (let i = 0; i < arr.length; i++) {
+					
 					let item = arr[i];
 					currentSequence.push(item);
 					let currentItem = sequence[currentSequence.length-1];
 					let equal = pred(item,currentItem);
 					
 					if(equal === false){
-						currentGroup = currentGroup.concat(currentSequence);
+						concat(currentGroup,currentSequence);
 						currentSequence = [];
 						continue;
 					}
@@ -1192,7 +1198,7 @@ let Enumerable = (function() {
 					if(equal === true){
 						if(currentSequence.length === sequence.length){
 							if(includeSplitter === true){
-								currentGroup = currentGroup.concat(currentSequence);
+								concat(currentGroup,currentSequence);
 							}
 							rtn.push(currentGroup);
 							currentGroup = [];

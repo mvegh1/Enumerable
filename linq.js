@@ -1140,7 +1140,7 @@ let Enumerable = (function() {
             }
             return new Enumerable(data);
         }
-		Enumerable.prototype.Split = function(pred) {
+		Enumerable.prototype.Split = function(pred, includeSplitter) {
 			let scope = this;
             let data = CreateDataForNewEnumerable(scope);
             data.NewForEachAction = function(arr) {
@@ -1148,8 +1148,11 @@ let Enumerable = (function() {
 				let currentGroup = [];
                 for (let i = 0; i < arr.length; i++) {
 					let item = arr[i];
-					let equal = pred(item);
-					if(equal){
+					let equal = pred(i, item);
+					if(equal === true){
+						if(includeSplitter === true){
+							currentGroup.push(item);
+						}
 						rtn.push(currentGroup);
 						currentGroup = [];
 					} else { 
@@ -1158,6 +1161,52 @@ let Enumerable = (function() {
 				}
 				if(currentGroup.length > 0){
 					rtn.push(currentGroup);
+				}
+				for(let i = 0; i < rtn.length; i++){
+					rtn[i] = ParseDataAsEnumerable(rtn[i]);
+				}
+                return rtn;
+            }
+            return new Enumerable(data);			
+		}
+		Enumerable.prototype.SplitBy = function(sequence, pred, includeSplitter) {
+			let scope = this;
+            let data = CreateDataForNewEnumerable(scope);
+            data.NewForEachAction = function(arr) {
+                let rtn = [];
+				sequence = ParseDataAsArray(sequence);
+				let currentGroup = [];
+				let currentSequence = [];
+                for (let i = 0; i < arr.length; i++) {
+					let item = arr[i];
+					currentSequence.push(item);
+					let currentItem = sequence[currentSequence.length-1];
+					let equal = pred(item,currentItem);
+					
+					if(equal === false){
+						currentGroup = currentGroup.concat(currentSequence);
+						currentSequence = [];
+						continue;
+					}
+					
+					if(equal === true){
+						if(currentSequence.length === sequence.length){
+							if(includeSplitter === true){
+								currentGroup = currentGroup.concat(currentSequence);
+							}
+							rtn.push(currentGroup);
+							currentGroup = [];
+							currentSequence = [];
+						} else {
+							continue;
+						}
+					}
+				}
+				if(currentGroup.length > 0){
+					rtn.push(currentGroup);
+				}
+				for(let i = 0; i < rtn.length; i++){
+					rtn[i] = ParseDataAsEnumerable(rtn[i]);
 				}
                 return rtn;
             }

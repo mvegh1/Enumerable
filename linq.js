@@ -242,16 +242,19 @@ let Enumerable = (function() {
  	
     // Private functions across module
     function ParseDataAsArray(data) {
-        if (data.hasOwnProperty("length")) {
+        if (Array.isArray(data)) {
             return data;
         }
         if (data.ToArray !== undefined) {
             return data.ToArray();
         }
+		if(typeof data === "string"){
+			return data.split("");
+		}
         return Array.from(data);
     }
     function ParseDataAsEnumerable(data) {
-        if (data.hasOwnProperty("length")) {
+        if (Array.isArray(data)){
             return new Enumerable({
                 Data: data
             });
@@ -260,7 +263,11 @@ let Enumerable = (function() {
         if (data.ToEnumerable !== undefined) {
             return data.ToEnumerable();
         }
-
+		if(typeof data === "string"){
+			return new Enumerable({
+				Data: data.split("")
+			});
+		}
 		return new Enumerable({
 			Data: Array.from(data)
 		});
@@ -1133,6 +1140,29 @@ let Enumerable = (function() {
             }
             return new Enumerable(data);
         }
+		Enumerable.prototype.Split = function(pred) {
+			let scope = this;
+            let data = CreateDataForNewEnumerable(scope);
+            data.NewForEachAction = function(arr) {
+                let rtn = [];
+				let currentGroup = [];
+                for (let i = 0; i < arr.length; i++) {
+					let item = arr[i];
+					let equal = pred(item);
+					if(equal){
+						rtn.push(currentGroup);
+						currentGroup = [];
+					} else { 
+						currentGroup.push(item);
+					}
+				}
+				if(currentGroup.length > 0){
+					rtn.push(currentGroup);
+				}
+                return rtn;
+            }
+            return new Enumerable(data);			
+		}
         Enumerable.prototype.GroupBy = function(pred) {
 			let scope = this;
             let data = CreateDataForNewEnumerable(scope);

@@ -2185,9 +2185,6 @@ let Enumerable = (function() {
                     Iteration();
                 } else {
 					scope.Events.FireEvent("OnEnumerationComplete", []);
-					if(scope.CompleteCount === scope.TotalCount && scope.Enumerator.Current === undefined){
-						scope.Events.FireEvent("OnComplete", []);
-					}
 					return;
                 }
             }, scope.Interval);

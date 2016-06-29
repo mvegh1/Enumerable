@@ -250,7 +250,6 @@ let Enumerable = (function() {
         this.Current = new KeyValuePair(next.Value, val);
         return new EnumeratorItem(this.Current, this.Done);
     }
-
     function EventManager() {
         this.Events = {};
     }
@@ -1054,6 +1053,19 @@ let Enumerable = (function() {
     Enumerable.prototype.Contains = function(item) {
         let scope = this;
         return scope.IndexOf(item) > -1;
+    }
+    Enumerable.prototype.ContainsSequence = function(sequence) {
+        let scope = this;
+		let cnt = 0;
+		let pred = function(item){
+			cnt++;
+			if(cnt > 1){
+				return false;
+			}
+			return true;
+		}
+        scope.SplitBy(sequence).ForEach(pred);
+		return cnt > 1;
     }
     Enumerable.prototype.Except = function(items, pred, pred2) {
         let scope = this;
@@ -2136,19 +2148,28 @@ let Enumerable = (function() {
     Enumerable.prototype.Async = function(interval) {
         return new AsyncEnumerable(this.GetEnumerator(), interval);
     }
-
     let AsyncEnumerable = function(enumerator, interval) {
-        Reconstructable.apply(this, Array.from(arguments));
         this.Enumerator = enumerator;
         this.Interval = interval;
         this.Canceled = false;
+		this.CompleteCount = 0;
+		this.TotalCount = 0;
         this.Action = null;
         this.Events = new EventManager();
+		this.TimeoutID = -1;
     }
     AsyncEnumerable.prototype.ForEach = function(action) {
         let scope = this;
         scope.Action = action;
         scope.Canceled = false;
+		let itemCallback = function(){
+			scope.CompleteCount++;
+			if(scope.CompleteCount === scope.TotalCount && scope.Enumerator.Current === undefined){
+				scope.Events.FireEvent("OnComplete", []);
+				return false;
+			}
+			return true;
+		}
         let Iteration = function() {
             if (scope.Canceled === true) {
                 return;
@@ -2156,11 +2177,18 @@ let Enumerable = (function() {
             setTimeout(function asyncForEachIteration() {
                 let next = scope.Enumerator.Next();
                 if (next.Value !== undefined) {
-                    action(next.Value);
+					scope.TotalCount++;
+                    let rtn = action(next.Value, itemCallback);
+					if(rtn === false){
+						return;
+					}
                     Iteration();
                 } else {
-                    scope.Events.FireEvent("OnComplete", []);
-                    return;
+					scope.Events.FireEvent("OnEnumerationComplete", []);
+					if(scope.CompleteCount === scope.TotalCount && scope.Enumerator.Current === undefined){
+						scope.Events.FireEvent("OnComplete", []);
+					}
+					return;
                 }
             }, scope.Interval);
         }

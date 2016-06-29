@@ -255,11 +255,16 @@ let Enumerable = (function() {
     }
     EventManager.prototype.FireEvent = function(evt, data) {
         let events = this.Events[evt];
+		let rtn = true;
         if (events !== undefined) {
             for (let i = 0; i < events.length; i++) {
-                events[i].call(this, data);
+                let thisRtn = events[i].call(this, data);
+				if(thisRtn === false){
+					rtn = false;
+				}
             }
         }
+		return rtn;
     }
     EventManager.prototype.BindEvent = function(evt, action) {
         if (this.Events[evt] === undefined) {
@@ -2160,35 +2165,69 @@ let Enumerable = (function() {
     }
     AsyncEnumerable.prototype.ForEach = function(action) {
         let scope = this;
+		let completed = false;
         scope.Action = action;
         scope.Canceled = false;
-		let itemCallback = function(){
-			scope.CompleteCount++;
+		scope.Events.BindEvent("OnComplete", function(){
+			completed = true;
+		});
+		let tryOnComplete = function(){
+			if(completed){
+				return false;
+			}
 			if(scope.CompleteCount === scope.TotalCount && scope.Enumerator.Current === undefined){
 				scope.Events.FireEvent("OnComplete", []);
 				return false;
 			}
-			return true;
+			return true;			
+		}
+		let itemCallback = function(){
+			scope.CompleteCount++;
+			return tryOnComplete();
 		}
         let Iteration = function() {
-            if (scope.Canceled === true) {
-                return;
-            }
-            setTimeout(function asyncForEachIteration() {
-                let next = scope.Enumerator.Next();
-                if (next.Value !== undefined) {
-					scope.TotalCount++;
-                    let rtn = action(next.Value, itemCallback);
-					if(rtn === false){
+			    // Don't run if canceled
+				if (scope.Canceled === true) {
+					return;
+				}
+				setTimeout(function asyncForEachIteration() {
+					let next = scope.Enumerator.Next();
+					// Not finished yet
+					if (next.Value !== undefined) {
+						scope.TotalCount++;
+						try{
+							// Can abort based off the action return value
+							let rtn = action(next.Value, itemCallback);
+							if(rtn === false){
+								return;
+							}
+							// Kick off next iteration
+							Iteration();
+						}
+						catch(e){
+							// Fire the OnError event, which let's us know if we should continue
+							let cont = scope.Events.FireEvent("OnError",[e]);
+							// Continue denied, abort
+							if(cont !== true){
+								return;
+							} else {
+								// Continue allowed. Count this and see if we are finished or not
+								scope.CompleteCount++;
+								let canContinue = tryOnComplete();
+								if(canContinue === true){
+									Iteration();
+								}
+							}
+						}
+					} else {
+						scope.Events.FireEvent("OnEnumerationComplete", []);
+						tryOnComplete();
 						return;
 					}
-                    Iteration();
-                } else {
-					scope.Events.FireEvent("OnEnumerationComplete", []);
-					return;
-                }
-            }, scope.Interval);
+				}, scope.Interval);
         }
+		
+		//Kick off the events
         Iteration();
     }
     AsyncEnumerable.prototype.Cancel = function() {

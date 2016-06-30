@@ -250,7 +250,46 @@ let Enumerable = (function() {
         this.Current = new KeyValuePair(next.Value, val);
         return new EnumeratorItem(this.Current, this.Done);
     }
-    function EventManager() {
+    
+	function AsyncToken(owner){
+		this.Owner = owner;
+		this.Reason = null;
+		this.Events = new EventManager();
+	}
+	AsyncToken.prototype.Reject = function(data){
+		this.Reason = new RejectReason(data);
+		this.Events.FireEvent("OnReject",[data]);
+	}
+	AsyncToken.prototype.Resolve = function(data){
+		this.Reason = new ResolveReason(data);
+		this.Events.FireEvent("OnResolve",[data]);
+	}
+	AsyncToken.prototype.Clone = function(){
+		let token = new AsyncToken(this.Owner);
+		token.Reason = this.Reason;
+		token.Events = this.Events.Clone();
+		return token;
+	}
+	function BaseReason(data){
+		this.Data = data;
+	}
+	BaseReason.prototype.IsReject = function(){
+		return this instanceof RejectReason;
+	}
+	BaseReason.prototype.IsResolve = function(){
+		return this instanceof ResolveReason;
+	}
+	function RejectReason(data){
+		BaseReason.apply(this,[data]);
+	}
+	RejectReason.prototype = Object.create(BaseReason.prototype);
+	function ResolveReason(data){
+		BaseReason.apply(this,[data]);
+	}
+	ResolveReason.prototype = Object.create(BaseReason.prototype);
+
+	
+	function EventManager() {
         this.Events = {};
     }
     EventManager.prototype.FireEvent = function(evt, data) {
@@ -258,7 +297,7 @@ let Enumerable = (function() {
 		let rtn = true;
         if (events !== undefined) {
             for (let i = 0; i < events.length; i++) {
-                let thisRtn = events[i].call(this, data);
+                let thisRtn = events[i].apply(this, data);
 				if(thisRtn === false){
 					rtn = false;
 				}
@@ -284,7 +323,15 @@ let Enumerable = (function() {
                 this.Events[evt] = newArr;
             }
         }
-        // Private functions across module
+	EventManager.prototype.Clone = function(){
+		var em = new EventManager();
+		em.Events = {};
+		for(let prop in this.Events){
+			em.Events[prop] = this.Events[prop];
+		}
+		return em;
+	}
+    // Private functions across module
     function ParseDataAsArray(data) {
         if (Array.isArray(data)) {
             return data;
@@ -2150,10 +2197,15 @@ let Enumerable = (function() {
         }
         return new Enumerable(data);
     }
-    Enumerable.prototype.Async = function(interval) {
-        return new AsyncEnumerable(this.GetEnumerator(), interval);
+    Enumerable.prototype.AsyncParallel = function(interval) {
+        return new AsyncParallel(this.GetEnumerator(), interval);
     }
-    let AsyncEnumerable = function(enumerator, interval) {
+    Enumerable.prototype.AsyncSequential = function() {
+        return new AsyncSequential(this.GetEnumerator());
+    }
+    
+	let AsyncParallel = function(enumerator, interval) {
+		this.Token = new AsyncToken(this);
         this.Enumerator = enumerator;
         this.Interval = interval;
         this.Canceled = false;
@@ -2161,18 +2213,33 @@ let Enumerable = (function() {
 		this.TotalCount = 0;
         this.Action = null;
         this.Events = new EventManager();
-		this.TimeoutID = -1;
     }
-    AsyncEnumerable.prototype.ForEach = function(action) {
+    AsyncParallel.prototype.ForEach = function(action) {
         let scope = this;
 		let completed = false;
-        scope.Action = action;
-        scope.Canceled = false;
+		let rejected = false;
+		scope.Token.Events.BindEvent("OnResolve", (data)=>{
+			scope.CompleteCount++;
+			if(rejected === true){
+				return;
+			}
+			scope.Events.FireEvent("OnResolve", [data]);
+			tryOnComplete();
+		});
+		scope.Token.Events.BindEvent("OnReject", (data)=>{
+			if(rejected === true){
+				return;
+			}
+			rejected = true;
+			scope.Events.FireEvent("OnReject", [data]);
+			return;		
+		});
 		scope.Events.BindEvent("OnComplete", function(){
 			completed = true;
 		});
+		
 		let tryOnComplete = function(){
-			if(completed){
+			if(completed === true || rejected === true){
 				return false;
 			}
 			if(scope.CompleteCount === scope.TotalCount && scope.Enumerator.Current === undefined){
@@ -2181,64 +2248,102 @@ let Enumerable = (function() {
 			}
 			return true;			
 		}
-		let itemCallback = function(){
-			scope.CompleteCount++;
-			return tryOnComplete();
-		}
         let Iteration = function() {
-			    // Don't run if canceled
-				if (scope.Canceled === true) {
+			setTimeout(function asyncForEachIteration() {
+				let next = scope.Enumerator.Next();
+				// Not finished yet
+				if (next.Value !== undefined) {
+					scope.TotalCount++;
+					try{
+						let token = scope.Token.Clone();
+						action(next.Value,token);
+						Iteration();
+					}
+					catch(e){
+						// Fire the OnError event, which let's us know if we should continue
+						let cont = scope.Events.FireEvent("OnError",[e]);
+						// Continue denied, abort
+						if(cont !== true){
+							return;
+						} else {
+							// Continue allowed. Count this and see if we are finished or not
+							scope.CompleteCount++;
+							let canContinue = tryOnComplete();
+							if(canContinue === true){
+								Iteration();
+							}
+						}
+					}
+				} else {
+					scope.Events.FireEvent("OnEnumerationComplete", []);
+					tryOnComplete();
 					return;
 				}
-				setTimeout(function asyncForEachIteration() {
-					let next = scope.Enumerator.Next();
-					// Not finished yet
-					if (next.Value !== undefined) {
-						scope.TotalCount++;
-						try{
-							// Can abort based off the action return value
-							let rtn = action(next.Value, itemCallback);
-							if(rtn === false){
-								return;
-							}
-							// Kick off next iteration
-							Iteration();
-						}
-						catch(e){
-							// Fire the OnError event, which let's us know if we should continue
-							let cont = scope.Events.FireEvent("OnError",[e]);
-							// Continue denied, abort
-							if(cont !== true){
-								return;
-							} else {
-								// Continue allowed. Count this and see if we are finished or not
-								scope.CompleteCount++;
-								let canContinue = tryOnComplete();
-								if(canContinue === true){
-									Iteration();
-								}
-							}
-						}
-					} else {
-						scope.Events.FireEvent("OnEnumerationComplete", []);
-						tryOnComplete();
-						return;
-					}
-				}, scope.Interval);
+			}, scope.Interval);
         }
 		
 		//Kick off the events
         Iteration();
+		return scope.Token;
     }
-    AsyncEnumerable.prototype.Cancel = function() {
-        this.Canceled = true;
-        this.Events.FireEvent("OnCancel", []);
+
+	let AsyncSequential = function(enumerator){
+		this.Token = new AsyncToken(this);
+        this.Enumerator = enumerator;
+        this.Events = new EventManager();		
+	}
+    AsyncSequential.prototype.ForEach = function(action) {
+        let scope = this;
+		let rejected = false;
+		scope.Token.Events.BindEvent("OnResolve", (data)=>{
+			if(rejected === true){
+				return;
+			}
+			scope.Events.FireEvent("OnResolve", [data]);
+			if(scope.Enumerator.Current === undefined){
+				scope.Events.FireEvent("OnComplete");
+				return;
+			}
+			Iteration();			
+		});
+		
+		scope.Token.Events.BindEvent("OnReject", (data)=>{
+			if(rejected === true){
+				return;
+			}
+			rejected = true;
+			scope.Events.FireEvent("OnReject", [data]);
+			return;		
+		});
+		
+		let Iteration = function(){
+			if(rejected === true){
+				return;
+			}
+			let next = scope.Enumerator.Next();
+			if(next.Value === undefined){
+				scope.Events.FireEvent("OnComplete");
+				return;				
+			}
+			try{
+				action(next.Value,scope.Token);
+			} 
+			catch(e){
+				let canContinue = scope.Events.FireEvent("OnError",[e]);
+				if(canContinue === false){
+					return;
+				} else {
+					Iteration();
+				}
+			}
+		}
+		Iteration();
+		return scope.Token;
     }
-    AsyncEnumerable.prototype.Resume = function() {
-        this.Events.FireEvent("OnResume", []);
-        this.ForEach(this.Action);
-    }
-    let OrderPredicate = function(pred, desc) {
+
+
+	
+	let OrderPredicate = function(pred, desc) {
         this.SortFunctions = [];
         let scope = this;
         this.SortComparer = null;

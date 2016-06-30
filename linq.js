@@ -2254,24 +2254,21 @@ let Enumerable = (function() {
 				// Not finished yet
 				if (next.Value !== undefined) {
 					scope.TotalCount++;
+					let token = scope.Token.Clone();
 					try{
-						let token = scope.Token.Clone();
 						action(next.Value,token);
 						Iteration();
 					}
 					catch(e){
-						// Fire the OnError event, which let's us know if we should continue
-						let cont = scope.Events.FireEvent("OnError",[e]);
-						// Continue denied, abort
-						if(cont !== true){
-							return;
-						} else {
-							// Continue allowed. Count this and see if we are finished or not
-							scope.CompleteCount++;
-							let canContinue = tryOnComplete();
-							if(canContinue === true){
+						try{
+							// Fire the OnError event, which let's us know if we should continue
+							scope.Events.FireEvent("OnError",[e,token]);
+							if(token.Reason.IsReject() === false){
 								Iteration();
 							}
+						}
+						catch(e2){
+							token.Reject(e2);
 						}
 					}
 				} else {
@@ -2286,7 +2283,16 @@ let Enumerable = (function() {
         Iteration();
 		return scope.Token;
     }
-
+	AsyncParallel.prototype.Catch = function(handler){
+		this.Events.BindEvent("OnError",handler);
+	}
+	AsyncParallel.prototype.Finally = function(onDone){
+		this.Events.BindEvent("OnComplete",onDone);		
+	}
+	AsyncParallel.prototype.FinallyEnumerated = function(onDone){
+		this.Events.BindEvent("OnEnumerationComplete",onDone);		
+	}
+	
 	let AsyncSequential = function(enumerator){
 		this.Token = new AsyncToken(this);
         this.Enumerator = enumerator;
@@ -2329,20 +2335,24 @@ let Enumerable = (function() {
 				action(next.Value,scope.Token);
 			} 
 			catch(e){
-				let canContinue = scope.Events.FireEvent("OnError",[e]);
-				if(canContinue === false){
-					return;
-				} else {
-					Iteration();
+				try{
+					// Fire the OnError event, which let's us know if we should continue
+					scope.Events.FireEvent("OnError",[e,scope.Token]);
+				}
+				catch(e2){
+					scope.Token.Reject(e2);
 				}
 			}
 		}
 		Iteration();
 		return scope.Token;
     }
-
-
-	
+	AsyncSequential.prototype.Catch = function(handler){
+		this.Events.BindEvent("OnError",handler);
+	}
+	AsyncSequential.prototype.Finally = function(onDone){
+		this.Events.BindEvent("OnComplete",onDone);		
+	}
 	let OrderPredicate = function(pred, desc) {
         this.SortFunctions = [];
         let scope = this;

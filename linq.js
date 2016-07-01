@@ -165,7 +165,47 @@ let Enumerable = (function() {
         return new EnumeratorItem(this.Current, done);
     }
 
-    function LazyEnumerator(data) {
+	function EnumeratorCollection(){
+		this.Collection = [];
+		this.Current = undefined;
+		this.Done = false;
+		this.Index = -1;
+	}
+	EnumeratorCollection.prototype.AddItem = function(item){
+		this.Collection.push( new Enumerator( [item] ) );
+	}
+	EnumeratorCollection.prototype.AddItems = function(items){
+		let enumerable = ParseDataAsEnumerable(items);
+		let enumerator = enumerable.GetEnumerator();
+		this.Collection.push( enumerator );
+	}
+	EnumeratorCollection.prototype.Next = function(){
+		if(this.Collection.length === 0 || this.Index > this.Collection.length - 1){
+			this.Current = undefined;
+			this.Done = true;
+			return new EnumeratorItem(undefined,true);
+		}
+		let enumerator = this.Collection[this.Index];
+		if(enumerator === undefined){
+			this.Index++;
+			enumerator = this.Collection[this.Index];
+			if(enumerator === undefined){
+				this.Current = undefined;
+				this.Done = true;
+				return new EnumeratorItem(undefined,true);
+			}
+		}
+		var next = enumerator.Next();
+		if(next.Value === undefined){
+			this.Index++;
+			return this.Next();
+		}
+		this.Current = next.Value;
+		this.Done = next.Done;
+		return next;
+	}
+    
+	function LazyEnumerator(data) {
         this.Data = data.Data;
         this.Enumerable = data.Clone();
         this.Index = -1;
@@ -2198,15 +2238,16 @@ let Enumerable = (function() {
         return new Enumerable(data);
     }
     Enumerable.prototype.AsyncParallel = function(interval) {
-        return new AsyncParallel(this.GetEnumerator(), interval);
+        return new AsyncParallel(this, interval);
     }
     Enumerable.prototype.AsyncSequential = function() {
-        return new AsyncSequential(this.GetEnumerator());
+        return new AsyncSequential(this);
     }
     
-	let AsyncParallel = function(enumerator, interval) {
+	let AsyncParallel = function(enumerable, interval) {
 		this.Token = new AsyncToken(this);
-        this.Enumerator = enumerator;
+        this.Enumerator = new EnumeratorCollection();
+		this.Enumerator.AddItems(enumerable);
         this.Interval = interval;
         this.Canceled = false;
 		this.CompleteCount = 0;
@@ -2234,7 +2275,7 @@ let Enumerable = (function() {
 			scope.Events.FireEvent("OnReject", [data]);
 			return;		
 		});
-		scope.Events.BindEvent("OnComplete", function(){
+		scope.Events.BindEvent("OnComplete", function(data){
 			completed = true;
 		});
 		
@@ -2243,7 +2284,7 @@ let Enumerable = (function() {
 				return false;
 			}
 			if(scope.CompleteCount === scope.TotalCount && scope.Enumerator.Current === undefined){
-				scope.Events.FireEvent("OnComplete", []);
+				scope.Events.FireEvent("OnComplete");
 				return false;
 			}
 			return true;			
@@ -2283,19 +2324,27 @@ let Enumerable = (function() {
         Iteration();
 		return scope.Token;
     }
+	AsyncParallel.prototype.Then = function(item){
+		this.Enumerator.AddItem(item);
+		return this;
+	}
 	AsyncParallel.prototype.Catch = function(handler){
 		this.Events.BindEvent("OnError",handler);
+		return this;
 	}
 	AsyncParallel.prototype.Finally = function(onDone){
-		this.Events.BindEvent("OnComplete",onDone);		
+		this.Events.BindEvent("OnComplete",onDone);	
+		return this;
 	}
 	AsyncParallel.prototype.FinallyEnumerated = function(onDone){
 		this.Events.BindEvent("OnEnumerationComplete",onDone);		
+		return this;
 	}
 	
-	let AsyncSequential = function(enumerator){
+	let AsyncSequential = function(enumerable){
 		this.Token = new AsyncToken(this);
-        this.Enumerator = enumerator;
+        this.Enumerator = new EnumeratorCollection();
+		this.Enumerator.AddItems(enumerable);
         this.Events = new EventManager();		
 	}
     AsyncSequential.prototype.ForEach = function(action) {
@@ -2307,7 +2356,7 @@ let Enumerable = (function() {
 			}
 			scope.Events.FireEvent("OnResolve", [data]);
 			if(scope.Enumerator.Current === undefined){
-				scope.Events.FireEvent("OnComplete");
+				scope.Events.FireEvent("OnComplete", [scope.Token.Reason.Data]);
 				return;
 			}
 			Iteration();			
@@ -2328,7 +2377,7 @@ let Enumerable = (function() {
 			}
 			let next = scope.Enumerator.Next();
 			if(next.Value === undefined){
-				scope.Events.FireEvent("OnComplete");
+				scope.Events.FireEvent("OnComplete", [scope.Token.Reason.Data]);
 				return;				
 			}
 			try{
@@ -2347,11 +2396,17 @@ let Enumerable = (function() {
 		Iteration();
 		return scope.Token;
     }
+	AsyncSequential.prototype.Then = function(item){
+		this.Enumerator.AddItem(item);
+		return this;
+	}
 	AsyncSequential.prototype.Catch = function(handler){
 		this.Events.BindEvent("OnError",handler);
+		return this;
 	}
 	AsyncSequential.prototype.Finally = function(onDone){
-		this.Events.BindEvent("OnComplete",onDone);		
+		this.Events.BindEvent("OnComplete",onDone);	
+		return this;
 	}
 	let OrderPredicate = function(pred, desc) {
         this.SortFunctions = [];

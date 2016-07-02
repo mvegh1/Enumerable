@@ -730,6 +730,7 @@ let Enumerable = (function() {
     }
 	Enumerable.prototype.MemoEach = function(cache,action){
 		let memo = new MemoizeFunc(cache);
+		action = action || function memoEachDoNothing(){};
         this.ForEach(function(i,v){
 			let val = memo.Call(v);
 			action(val);

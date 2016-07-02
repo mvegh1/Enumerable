@@ -291,6 +291,129 @@ let Enumerable = (function() {
         return new EnumeratorItem(this.Current, this.Done);
     }
     
+	function MemoizeFunc(func){
+		this.Func = func;
+		this.Cache = new Map();
+	}
+	MemoizeFunc.prototype.Call = function(){
+		let args = Array.from(arguments);
+		let currentLevel = this.Cache;
+		
+		// Iterate thru arguments
+		for(let i = 0; i < args.length; i++){
+			let arg = args[i];
+			// Already cached this, fetch and continue
+			if(currentLevel.has(arg)){
+				currentLevel = currentLevel.get(arg);
+			} else {
+				// Not cached, and last level. Calculate the final value to cache
+				if(i >= args.length - 1){
+					let val = this.Func.apply(this,args);
+					currentLevel.set(arg,val);
+					return val;
+				} else {
+					// Not cached, but not at last level. Set this to a new Mapping
+					currentLevel.set(arg, new Map());
+					currentLevel = currentLevel.get(arg);
+				}
+			}
+		}
+		return currentLevel
+	}
+	function MemoizeFuncAsync(func, callBack){
+		let scope = this;
+		this.Func = func;
+		this.Cache = new Map();	
+		this.Callback = callBack;
+		this.Events = new EventManager();
+		this.Events.BindEvent("OnResolve", (data, args)=>{
+			scope.SetCache(args,data);
+			callBack(data);
+		});
+		this.Events.BindEvent("OnReject", (data, args)=>{
+			callBack(data);
+		});
+	}
+	MemoizeFuncAsync.prototype.GetCache = function(args){
+		let currentLevel = this.Cache;
+		for(let i = 0; i < args.length; i++){
+			let arg = args[i];
+			// Already cached this
+			if(currentLevel.has(arg)){
+				// Overwrite the value in the cache
+				if(i >= args.length -1){
+					return currentLevel.get(arg);
+				}
+				// Get the next level
+				currentLevel = currentLevel.get(arg);
+			} else {
+				// Not cached
+				return undefined;
+			}
+		}		
+	}
+	MemoizeFuncAsync.prototype.SetCache = function(args, value){
+		let currentLevel = this.Cache;
+		for(let i = 0; i < args.length; i++){
+			let arg = args[i];
+			// Already cached this
+			if(currentLevel.has(arg)){
+				// Overwrite the value in the cache
+				if(i >= args.length -1){
+					currentLevel.set(arg,value);
+					return value;
+				}
+				// Get the next level
+				currentLevel = currentLevel.get(arg);
+			} else {
+				// Not cached, and last level. Set the final value to cache
+				if(i >= args.length - 1){
+					currentLevel.set(arg,value);
+					return value;
+				}
+				// Not cached, but not at last level. Set this to a new Mapping
+				currentLevel.set(arg, new Map());
+				currentLevel = currentLevel.get(arg);
+			}
+		}	
+		return value;
+	}
+	MemoizeFuncAsync.prototype.Call = function(){
+		let args = Array.from(arguments);
+		let currentLevel = this.Cache;
+		let token = new AsyncToken(this);
+		let arg = null;
+		token.Events.BindEvent("OnResolve", (data) => {
+			this.Events.FireEvent("OnResolve", [data,args]);
+		});
+		token.Events.BindEvent("OnReject", (data) => {
+			this.Events.FireEvent("OnReject", [data]);
+		});
+		// Iterate thru arguments
+		for(let i = 0; i < args.length; i++){
+			arg = args[i];
+			// Already cached this, fetch and continue
+			if(currentLevel.has(arg)){
+				currentLevel = currentLevel.get(arg);
+			} else {
+				// Not cached, and last level. Calculate the final value to cache
+				if(i >= args.length - 1){
+					console.log("Fetching fresh async data")
+					let newArgs = args.slice();
+					newArgs.push(token);
+					this.Func.apply(this,newArgs);
+					return;
+				} else {
+					// Not cached, but not at last level. Set this to a new Mapping
+					currentLevel.set(arg, new Map());
+					currentLevel = currentLevel.get(arg);
+				}
+			}
+		}
+		console.log("Sending back cached data");
+		this.Events.FireEvent("OnResolve",[currentLevel,args]);
+	}
+	
 	function AsyncToken(owner){
 		this.Owner = owner;
 		this.Reason = new BaseReason();
@@ -623,6 +746,41 @@ let Enumerable = (function() {
         ProcessPredicatesNoReturn(this.Predicates, arr, action);
         return;
     }
+	Enumerable.prototype.MemoEach = function(cache,action){
+		let memo = new MemoizeFunc(cache);
+        this.ForEach(function(i,v){
+			let val = memo.Call(v);
+			action(val);
+		});
+	}
+	Enumerable.prototype.MemoEachAsync = function(cache,action){
+		let pending = new Map();
+		let waitList = new Map();
+		
+		let memo = new MemoizeFuncAsync(cache,action);
+		memo.Events.BindEvent("OnResolve", function(val, args){
+			let v = args[0];
+			if(waitList.has(v)){
+				let wait = waitList.get(v);
+				for(let i = 0; i < wait.length; i++){
+					action(val);
+				}
+				waitList.delete(v);
+			}
+			if(pending.has(v)){
+				pending.delete(v);
+			}
+		});
+        this.ForEach(function(i,v){
+			if(pending.has(v) === false){
+				pending.set(v,true);
+				waitList.set(v,[]);
+				memo.Call(v);
+			} else {
+				waitList.get(v).push(v);
+			}
+		});
+	}
 
     let WherePredicate = function(pred) {
         Reconstructable.apply(this, arguments);

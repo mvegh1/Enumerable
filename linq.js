@@ -293,7 +293,7 @@ let Enumerable = (function() {
     
 	function AsyncToken(owner){
 		this.Owner = owner;
-		this.Reason = null;
+		this.Reason = new BaseReason();
 		this.Events = new EventManager();
 	}
 	AsyncToken.prototype.Reject = function(data){
@@ -601,7 +601,22 @@ let Enumerable = (function() {
         }
         return rtn;
     }
-
+	Enumerable.prototype.ToJSON = function(){
+		let arr = this.ToArray();
+		return JSON.stringify(arr);
+	}
+	Enumerable.prototype.ToString = function(separator){
+		let arr = this.ToArray();
+		separator = separator || "";
+		let rtn = "";
+		for(let i = 0; i < arr.length; i++){
+			if(i > 0){
+				rtn += separator;
+			}
+			rtn += arr[i].toString();
+		}
+		return rtn;
+	}
     Enumerable.prototype.ForEach = function(action) {
         let arr = this.Data;
         arr = this.ForEachActionStack[this.ForEachActionStack.length - 1](arr);
@@ -625,11 +640,6 @@ let Enumerable = (function() {
     Enumerable.prototype.Where = function(pred) {
         let scope = this;
         let data = CreateDataForNewEnumerable(scope);
-        if (pred === undefined) {
-            pred = function(item) {
-                return true;
-            }
-        }
         data.WherePredicate = new WherePredicate(pred);
         return new FilteredEnumerable(data);
     }

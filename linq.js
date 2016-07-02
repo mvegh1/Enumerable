@@ -331,26 +331,8 @@ let Enumerable = (function() {
 			callBack(data);
 		});
 		this.Events.BindEvent("OnReject", (data, args)=>{
-			callBack(data);
+			callBack(data, args);
 		});
-	}
-	MemoizeFuncAsync.prototype.GetCache = function(args){
-		let currentLevel = this.Cache;
-		for(let i = 0; i < args.length; i++){
-			let arg = args[i];
-			// Already cached this
-			if(currentLevel.has(arg)){
-				// Overwrite the value in the cache
-				if(i >= args.length -1){
-					return currentLevel.get(arg);
-				}
-				// Get the next level
-				currentLevel = currentLevel.get(arg);
-			} else {
-				// Not cached
-				return undefined;
-			}
-		}		
 	}
 	MemoizeFuncAsync.prototype.SetCache = function(args, value){
 		let currentLevel = this.Cache;
@@ -387,7 +369,7 @@ let Enumerable = (function() {
 			this.Events.FireEvent("OnResolve", [data,args]);
 		});
 		token.Events.BindEvent("OnReject", (data) => {
-			this.Events.FireEvent("OnReject", [data]);
+			this.Events.FireEvent("OnReject", [data, args]);
 		});
 		// Iterate thru arguments
 		for(let i = 0; i < args.length; i++){
@@ -756,7 +738,7 @@ let Enumerable = (function() {
 	Enumerable.prototype.MemoEachAsync = function(cache,action){
 		let pending = new Map();
 		let waitList = new Map();
-		
+		action = action || function memoEachAsyncDoNothing(){};
 		let memo = new MemoizeFuncAsync(cache,action);
 		memo.Events.BindEvent("OnResolve", function(val, args){
 			let v = args[0];
@@ -769,6 +751,24 @@ let Enumerable = (function() {
 			}
 			if(pending.has(v)){
 				pending.delete(v);
+			}
+		});
+		// Cache was denied, fetch fresh value
+		memo.Events.BindEvent("OnReject", function(val, args){
+			let v = args[0];
+			if(waitList.has(v)){
+				let wait = waitList.get(v);
+				let first = wait[0];
+				if(first !== undefined){
+					wait.splice(0,1);
+					if(wait.length === 0){
+						if(pending.has(v)){
+							pending.delete(v);
+						}	
+					}
+					memo.Call(first);
+					return;
+				}
 			}
 		});
         this.ForEach(function(i,v){

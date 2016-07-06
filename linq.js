@@ -542,9 +542,11 @@ let Enumerable = (function() {
         return rtn;
     }
 
-    function ProcessPredicatesNoReturn(Predicates, data, terminatingCondition) {
+    function ProcessPredicatesNoReturn(Predicates, data, terminatingCondition, closureObject) {
         ResetPredicates(Predicates);
-
+		if(closureObject === undefined){
+			closureObject = {};
+		}
         // No action was specified
         if (!terminatingCondition) {
             return;
@@ -564,7 +566,7 @@ let Enumerable = (function() {
                 continue;
             }
             idx++;
-            if (terminatingCondition(idx, item) === false) {
+            if (terminatingCondition(idx, item, closureObject) === false) {
                 return;
             }
 
@@ -722,10 +724,14 @@ let Enumerable = (function() {
 		}
 		return rtn;
 	}
-    Enumerable.prototype.ForEach = function(action) {
+	Enumerable.prototype.Memoize = function(){
+		let arr = this.ToArray();
+		return ParseDataAsEnumerable(arr);
+	}
+    Enumerable.prototype.ForEach = function(action, closureObject) {
         let arr = this.Data;
         arr = this.ForEachActionStack[this.ForEachActionStack.length - 1](arr);
-        ProcessPredicatesNoReturn(this.Predicates, arr, action);
+        ProcessPredicatesNoReturn(this.Predicates, arr, action, closureObject);
         return;
     }
 	Enumerable.prototype.MemoEach = function(cache,action){
@@ -1588,15 +1594,42 @@ let Enumerable = (function() {
     Enumerable.prototype.SplitBy = function(sequence, pred, includeSplitter) {
         let scope = this;
         let data = CreateDataForNewEnumerable(scope);
-
-        function concat(a, b) {
-            for (let i = 0; i < b.length; i++) {
-                a.push(b[i]);
-            }
-        }
         data.NewPredicate = new SplitByPredicate(sequence, pred, includeSplitter);
         return new Enumerable(data);
     }
+	
+	let BatchPredicate = function(cnt){
+        let scope = this;
+        Reconstructable.apply(this, Array.from(arguments));
+        this.CurrentSequence = [];
+		this.BatchSize = cnt;
+
+        this.Reset = function() {
+            this.CurrentSequence = [];
+        }
+        this.Execute = function(item, i, len) {
+            
+            this.CurrentSequence.push(item);
+            if(this.CurrentSequence.length === this.BatchSize){
+				let rtn = ParseDataAsEnumerable(this.CurrentSequence.slice());
+				this.CurrentSequence = [];
+				return rtn;
+			}
+            if (i >= len - 1) {
+                if (this.CurrentSequence.length > 0) {
+					let rtn = ParseDataAsEnumerable(this.CurrentSequence.slice());
+					this.CurrentSequence = [];
+					return rtn;
+                }
+            }
+        }		
+	}
+	Enumerable.prototype.Batch = function(cnt){
+        let scope = this;
+        let data = CreateDataForNewEnumerable(scope);
+        data.NewPredicate = new BatchPredicate(cnt);
+        return new Enumerable(data);		
+	}
     Enumerable.prototype.GroupBy = function(pred) {
         let scope = this;
         let data = CreateDataForNewEnumerable(scope);
@@ -2161,6 +2194,9 @@ let Enumerable = (function() {
         }
         return curr;
     }
+    Enumerable.prototype.AggregateRight = function(pred, seed) {
+	   return this.Reverse().Aggregate(pred,seed);	
+	}
     Enumerable.prototype.OfType = function(type) {
         let scope = this;
         return scope.Where(x => (typeof x) == type);
@@ -2412,6 +2448,7 @@ let Enumerable = (function() {
     Enumerable.prototype.AsyncSequential = function() {
         return new AsyncSequential(this);
     }
+	
     
 	let AsyncParallel = function(enumerable, interval) {
 		this.Token = new AsyncToken(this);
@@ -2878,6 +2915,7 @@ let Enumerable = (function() {
         scope._map.set(key, val);
     }
 
+	
     // Static methods for Enumerable
     PublicEnumerable.Extend = function(extenderMethod) {
             extenderMethod(Enumerable.prototype);

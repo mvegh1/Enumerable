@@ -1,9 +1,6 @@
 'use strict';
 let Enumerable = (function() {
     // Private constant variables for module
-    let FOR_EACH_ACTION_STACK_REF = function(arr) {
-        return arr;
-    };
     let InvalidItem;
 
     // Private Classes for module
@@ -541,7 +538,31 @@ let Enumerable = (function() {
         }
         return rtn;
     }
+    function ProcessPredicates(Predicates, data) {
+        ResetPredicates(Predicates);
 
+        if (Predicates.length === 0) {
+            return data;
+        }
+
+        let arr = [];
+        let idx = -1;
+        for (let len = data.length, i = 0; i !== len; i++) {
+            let item = data[i];
+            for (let j = 0, len2 = Predicates.length; j != len2; j++) {
+                let Predicate = Predicates[j];
+                item = Predicate.Execute(item, i, len);
+                if (item === InvalidItem) {
+                    break;
+                }
+            }
+            if (item !== InvalidItem) {
+                arr.push(item);
+            }
+        }
+        ResetPredicates(Predicates);
+        return arr;
+    }
     function ProcessPredicatesNoReturn(Predicates, data, terminatingCondition, closureObject) {
         ResetPredicates(Predicates);
 		if(closureObject === undefined){
@@ -595,7 +616,7 @@ let Enumerable = (function() {
         if (privateData.Predicates !== undefined) {
             scope.Predicates = privateData.Predicates.slice();
         }
-        scope.ForEachActionStack = [FOR_EACH_ACTION_STACK_REF];
+        scope.ForEachActionStack = [new DefaultForEachActionPredicate()];
         if (privateData.ForEachActionStack) {
             scope.ForEachActionStack = privateData.ForEachActionStack.slice();
         }
@@ -606,51 +627,35 @@ let Enumerable = (function() {
             scope.AddToPredicateStack(privateData.NewPredicate);
         }
     }
+	let DefaultForEachActionPredicate = function(){
+		this.Action = function(arr){
+			return arr;
+		}
+		this.Execute = function(arr){
+			return this.Action(arr);
+		}
+	}	
+	let ForEachActionPredicate = function(scope, action){
+		this.OldForEachActionPredicate = scope.ForEachActionStack[scope.ForEachActionStack.length - 1];
 
+		this.OldPredicates = scope.Predicates.slice();
+		scope.Predicates = [];
+		this.Action = action;
+		this.Execute = function(arr){
+            let newArr = this.OldForEachActionPredicate.Execute(arr);
+            newArr = ProcessPredicates(this.OldPredicates, newArr);
+            newArr = this.Action(newArr);
+            return newArr;			
+		}
+	}
     Enumerable.prototype.AddToForEachStack = function(action) {
         let scope = this;
-        let oldFeA = scope.ForEachActionStack[scope.ForEachActionStack.length - 1];
-        let oldPredicate = scope.Predicates.slice();
-        scope.Predicates = [];
-        let newFeA = function(arr) {
-            let newArr = oldFeA(arr);
-            newArr = scope.ProcessPredicates(oldPredicate, newArr);
-            newArr = action(newArr);
-            return newArr;
-        }
-        scope.ForEachActionStack.push(newFeA);
+        scope.ForEachActionStack.push( new ForEachActionPredicate(scope,action) );
     }
     Enumerable.prototype.AddToPredicateStack = function(pred) {
         let scope = this;
         scope.Predicates.push(pred);
     }
-    Enumerable.prototype.ProcessPredicates = function(Predicates, data) {
-        let scope = this;
-        ResetPredicates(Predicates);
-
-        if (Predicates.length === 0) {
-            return data;
-        }
-
-        let arr = [];
-        let idx = -1;
-        for (let len = data.length, i = 0; i !== len; i++) {
-            let item = data[i];
-            for (let j = 0, len2 = Predicates.length; j != len2; j++) {
-                let Predicate = Predicates[j];
-                item = Predicate.Execute(item, i, len);
-                if (item === InvalidItem) {
-                    break;
-                }
-            }
-            if (item !== InvalidItem) {
-                arr.push(item);
-            }
-        }
-        ResetPredicates(Predicates);
-        return arr;
-    }
-
 
     Enumerable.prototype.GetEnumerator = function() {
         return new LazyEnumerator(this);
@@ -676,8 +681,8 @@ let Enumerable = (function() {
     }
     Enumerable.prototype.ToArray = function() {
         let arr = this.Data;
-        arr = this.ForEachActionStack[this.ForEachActionStack.length - 1](arr);
-        arr = this.ProcessPredicates(this.Predicates, arr);
+        arr = this.ForEachActionStack[this.ForEachActionStack.length - 1].Execute(arr);
+        arr = ProcessPredicates(this.Predicates, arr);
         return arr;
     }
     Enumerable.prototype.ToReadOnlyArray = function() {
@@ -730,7 +735,7 @@ let Enumerable = (function() {
 	}
     Enumerable.prototype.ForEach = function(action, closureObject) {
         let arr = this.Data;
-        arr = this.ForEachActionStack[this.ForEachActionStack.length - 1](arr);
+        arr = this.ForEachActionStack[this.ForEachActionStack.length - 1].Execute(arr);
         ProcessPredicatesNoReturn(this.Predicates, arr, action, closureObject);
         return;
     }
@@ -793,8 +798,8 @@ let Enumerable = (function() {
         Reconstructable.apply(this, arguments);
         this.Predicate = pred;
         let scope = this;
-        this.Execute = function(item) {
-            let passed = this.Predicate(item);
+        this.Execute = function(item, i) {
+            let passed = this.Predicate(item, i);
             if (passed) {
                 return item;
             }
@@ -811,8 +816,8 @@ let Enumerable = (function() {
     let SelectPredicate = function(pred) {
         Reconstructable.apply(this, arguments);
         this.Predicate = pred;
-        this.Execute = function(item) {
-            return this.Predicate(item)
+        this.Execute = function(item, i) {
+            return this.Predicate(item, i)
         }
         this.Reset = function() {}
     }
@@ -1326,13 +1331,13 @@ let Enumerable = (function() {
 		let cnt = 0;
 		let pred = function(item){
 			cnt++;
-			if(cnt > 1){
+			if(cnt > 0){
 				return false;
 			}
 			return true;
 		}
         scope.SplitBy(sequence).ForEach(pred);
-		return cnt > 1;
+		return cnt > 0;
     }
     Enumerable.prototype.Except = function(items, pred, pred2) {
         let scope = this;
@@ -1427,14 +1432,7 @@ let Enumerable = (function() {
         return new Enumerable(data);
     }
     Enumerable.prototype.Prepend = function(items) {
-        let scope = this;
-        let data = CreateDataForNewEnumerable(scope);
-        data.NewForEachAction = function(arr) {
-            let itemArr = ParseDataAsArray(items);
-            let rtn = itemArr.concat(arr);
-            return rtn;
-        }
-        return new Enumerable(data);
+        return ParseDataAsEnumerable(items).Concat(this);
     }
     Enumerable.prototype.Zip = function(items, pred) {
         let scope = this;
@@ -1629,6 +1627,27 @@ let Enumerable = (function() {
         let data = CreateDataForNewEnumerable(scope);
         data.NewPredicate = new BatchPredicate(cnt);
         return new Enumerable(data);		
+	}
+	
+	Enumerable.prototype.BatchAccumulate = function(size){
+        let scope = this;
+        let data = CreateDataForNewEnumerable(scope);
+        data.NewForEachAction = function(arr){
+		   let batches = [];
+		   for(let v of arr){
+			   batches.push([]);
+			   let lbound = Math.max(0, batches.length-size);
+			   let ubound = batches.length;
+			   for(let i = lbound; i < ubound; i++){
+					let batch = batches[i];
+					if(batch.length < size){
+						batch.push(v);
+					}
+				}					   
+		   }	
+		   return batches;
+		}
+        return new Enumerable(data);			
 	}
     Enumerable.prototype.GroupBy = function(pred) {
         let scope = this;
@@ -2211,24 +2230,34 @@ let Enumerable = (function() {
 	let RemovePredicate = function(items){
 		let scope = this;
         Reconstructable.apply(this, Array.from(arguments));
-		this.Items = ParseDataAsEnumerable(items).ToLookup(x=>x,y=>y);
+		this.Items = ParseDataAsEnumerable(items);
+
 		this.ItemsToCheck;
         this.Reset = function() {
-            this.ItemsToCheck = this.Items.Clone();
+			scope.Items = scope.Items.Memoize();
+			let arr = scope.Items.ToArray();
+			scope.ItemsToCheck = new Map();
+			for(let i = 0; i < arr.length; i++){
+				let v = arr[i];
+				if(scope.ItemsToCheck.has(v)){
+					scope.ItemsToCheck.get(v).push(v);
+				} else {
+					scope.ItemsToCheck.set(v, [v]);
+				}
+			}
         }
         this.Execute = function(item, i, len) {
-			if(this.ItemsToCheck.length === 0){
+			if(this.ItemsToCheck.size === 0){
 				return item;
 			}
-			if(this.ItemsToCheck.ContainsKey(item) === false){
+			if(this.ItemsToCheck.has(item) === false){
 				return item;
 			}
-			let arr = this.ItemsToCheck.Get(item).ToArray();
-			arr = arr.slice(0);
-			if(arr.length === 0){
-				this.ItemsToCheck.Remove(item);
+			let arr = this.ItemsToCheck.get(item);
+			if(arr.length === 1){
+				this.ItemsToCheck.delete(item);
 			} else {
-				this.ItemsToCheck.Set(item, arr);
+				this.ItemsToCheck.set(item, arr.slice(0));
 			}
 			return InvalidItem;
 		}        		
@@ -2294,11 +2323,13 @@ let Enumerable = (function() {
         let scope = this;
         return scope.InsertRange(idx, [data]);
     }
-    Enumerable.prototype.InsertRange = function(idx, data) {
+    Enumerable.prototype.InsertRangeAt = function(idx, data) {
         let scope = this;
         let dataToPass = CreateDataForNewEnumerable(scope);
-
         dataToPass.NewForEachAction = function(arr) {
+			if(idx === Number.POSITIVE_INFINITY){
+				return arr.concat(data);
+			}
             let rtn = [];
             for (let i = 0; i < arr.length; i++) {
                 if (i === idx) {
@@ -2355,13 +2386,40 @@ let Enumerable = (function() {
         let arr = scope.ToArray();
         return arr[idx];
     }
+	let PushPredicate = function(scope,elm){
+        this.Elms = [elm];
+		let that = this;
+		ForEachActionPredicate.apply(this,[scope,function(arr){
+			let a = arr.slice();
+			return a.concat(that.Elms);
+		}]);
+	}
     Enumerable.prototype.Push = function(elm) {
         let scope = this;
-        return scope.Concat([elm]);
+		let fea = scope.ForEachActionStack[scope.ForEachActionStack.length-1];
+		if(fea instanceof PushPredicate){
+			fea.Elms.push(elm);
+			return this;
+		}
+        scope.ForEachActionStack.push( new PushPredicate(scope,elm) );
+		return this;
     }
+	let PopPredicate = function(scope){
+        this.PopCount = 1;
+		let that = this;
+		ForEachActionPredicate.apply(this,[scope,function(arr){
+			return arr.slice(0,Math.max(0,arr.length - that.PopCount));
+		}]);
+	}
     Enumerable.prototype.Pop = function() {
         let scope = this;
-        return scope.TakeExceptLast(1);
+		let fea = scope.ForEachActionStack[scope.ForEachActionStack.length-1];
+		if(fea instanceof PopPredicate){
+			fea.PopCount++;
+			return this;
+		}
+        scope.ForEachActionStack.push( new PopPredicate(scope) );
+		return this;
     }
     Enumerable.prototype.Shuffle = function() {
         let scope = this;

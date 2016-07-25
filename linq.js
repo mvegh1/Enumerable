@@ -1436,6 +1436,16 @@ let Enumerable = (function() {
         }
         return new Enumerable(data);
     }
+	
+	Enumerable.prototype.Slice = function(a,b) {
+        if(a === undefined){
+			a = 0;
+		}	
+		if( b === undefined){
+			b = POSITIVE_INFINITY;
+		}
+		return this.Skip(a).Take(b-a);
+	}
     Enumerable.prototype.Prepend = function(items) {
         return ParseDataAsEnumerable(items).Concat(this);
     }

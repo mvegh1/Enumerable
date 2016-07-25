@@ -853,7 +853,9 @@ let Enumerable = (function() {
         this.Predicate = function(item) {
             // returns undefined in failed, otherwise returns the item
             let result = this.Hash.TryAdd(item);
-            return result;
+			if(result !== undefined){
+				return item;
+			}
         }
         this.Execute = function(item) {
             return this.Predicate(item)
@@ -1077,7 +1079,10 @@ let Enumerable = (function() {
             let arr = SCOPE.ToArray();
             let idx = arr.length - 1;
             if (this.Predicate == null) {
-                return arr[idx];
+                return {
+                Index: idx,
+                Last: arr[idx]
+				};
             }
             while (idx > -1) {
                 let item = arr[idx];
@@ -1986,6 +1991,20 @@ let Enumerable = (function() {
             }
         }
         return sum;
+    }
+    Enumerable.prototype.Product = function(pred) {
+        let scope = this;
+        let arr = scope.ToArray();
+        let prod = 1;
+        for (let i = 0; i < arr.length; i++) {
+            let item = arr[i];
+            if (pred) {
+                prod *= pred(item);
+            } else {
+                prod *= item;
+            }
+        }
+        return prod;
     }
     let MaxPredicate = function(pred, level) {
         Reconstructable.apply(this, arguments);
@@ -3067,8 +3086,6 @@ let Enumerable = (function() {
 		dict._map = new Map(this._map);
 		return dict;
 	}
-
-	
     // Static methods for Enumerable
     PublicEnumerable.Extend = function(extenderMethod) {
             extenderMethod(Enumerable.prototype);
@@ -3119,6 +3136,27 @@ let Enumerable = (function() {
         }
         return ParseDataAsEnumerable(arr);
     }
+	PublicEnumerable.Combinations = function(data, subsetSize){
+		function getSubsets(superSet,  k,  idx, current, solution) {
+			//successful stop clause
+			if (current.length== k) {
+				solution.push(ParseDataAsEnumerable(current));
+				return;
+			}
+			//unseccessful stop clause
+			if (idx == superSet.length) return;
+			let x = superSet[idx];
+			current.push(x);
+			//"guess" x is in the subset
+			getSubsets(superSet, k, idx+1, current, solution);
+			current.pop();
+			//"guess" x is not in the subset
+			getSubsets(superSet, k, idx+1, current, solution);
+		}
+		let rtn = [];
+		getSubsets(data, subsetSize, 0, [], rtn);
+		return ParseDataAsEnumerable(rtn);
+	}
     PublicEnumerable.Inherit = function(object, dataGetter) {
             for (let prop in Enumerable.prototype) {
 

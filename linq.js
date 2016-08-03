@@ -538,6 +538,7 @@ let Enumerable = (function() {
         }
         return rtn;
     }
+	
     function ProcessPredicates(Predicates, data) {
         ResetPredicates(Predicates);
 
@@ -926,8 +927,10 @@ let Enumerable = (function() {
         Reconstructable.apply(this, arguments);
         this.Took = 0;
         this.TakeCount = cnt;
+		this.CanTake = true;
         this.Predicate = function(item) {
             if (this.Took >= this.TakeCount) {
+				this.CanTake = false;
                 return InvalidItem;
             }
             this.Took++;
@@ -938,6 +941,7 @@ let Enumerable = (function() {
         }
         this.Reset = function() {
             this.Took = 0;
+			this.CanTake = true;
         }
     }
     Enumerable.prototype.Take = function(cnt) {
@@ -1660,6 +1664,9 @@ let Enumerable = (function() {
 					}
 				}					   
 		   }	
+		   for(let i = 0; i < batches.length; i++){
+			   batches[i] = ParseDataAsEnumerable(batches[i]);
+		   }
 		   return batches;
 		}
         return new Enumerable(data);			
@@ -2528,14 +2535,17 @@ let Enumerable = (function() {
     }
     Enumerable.prototype.Write = function(symbol, pred) {
         let scope = this;
+		let rtn = "";
         if (!pred) {
-            return scope.Aggregate(function(curr, next) {
+            rtn = scope.Aggregate(function(curr, next) {
                 return curr + symbol + next;
             });
+			return rtn === null ? "" : rtn;
         }
-        return scope.Select(pred).Aggregate(function(curr, next) {
+        rtn = scope.Select(pred).Aggregate(function(curr, next) {
             return curr + symbol + next;
         });
+		return rtn === null ? "" : rtn;
     }
     Enumerable.prototype.WriteLine = function(pred) {
         let scope = this;
@@ -3131,20 +3141,40 @@ let Enumerable = (function() {
         return PublicEnumerable.From(arr);
     }
     PublicEnumerable.RangeDown = function(start, count, step) {
+		step = step || 1;
         return PublicEnumerable.Range(start, count, -step);
     }
     PublicEnumerable.Empty = function() {
         return PublicEnumerable.From([]);
     }
-    PublicEnumerable.Sequence = function(cnt, seed, generator) {
+    PublicEnumerable.Sequence = function(cnt, generator, seed) {
         let arr = [];
         seed = seed || [];
         arr = seed.splice();
-        for (let i = 0; i < cnt; i++) {
-            let newVal = generator(arr, i);
-            arr.push(newVal);
+		let i = 0;
+        while(arr.length != cnt){
+            let newVal = generator(i,arr);
+			if(newVal !== InvalidItem){
+				arr.push(newVal);
+			}
+			i++;
         }
         return ParseDataAsEnumerable(arr);
+    }
+    PublicEnumerable.Until = function(generator, seed) {
+        let arr = [];
+        seed = seed || [];
+        arr = seed.splice();
+		let i = 0;
+        while(true){
+            let newVal = generator(i,arr);
+			if(newVal !== InvalidItem){
+				arr.push(newVal);
+			} else {
+				return ParseDataAsEnumerable(arr);				
+			}
+			i++;
+        }
     }
 	PublicEnumerable.Combinations = function(data, subsetSize){
 		function getSubsets(superSet,  k,  idx, current, solution) {
@@ -3164,7 +3194,8 @@ let Enumerable = (function() {
 			getSubsets(superSet, k, idx+1, current, solution);
 		}
 		let rtn = [];
-		getSubsets(data, subsetSize, 0, [], rtn);
+		let arr = ParseDataAsArray(data);
+		getSubsets(arr, subsetSize, 0, [], rtn);
 		return ParseDataAsEnumerable(rtn);
 	}
     PublicEnumerable.Inherit = function(object, dataGetter) {

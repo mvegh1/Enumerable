@@ -999,7 +999,7 @@ let Enumerable = (function() {
             let idx = arr.length;
             let took = 0;
             let willTake = Math.min(cnt, arr.length);
-            while (took < cnt || idx > 0) {
+            while (took < willTake) {
                 idx--;
                 took++;
                 let item = arr[idx];

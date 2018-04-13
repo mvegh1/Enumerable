@@ -1,41 +1,59 @@
-
 let Enumerable = ((() => {
+	let _Old = undefined;
     // Private constant variables for module
-    let InvalidItem;
+
+    function CloneArray(arr){
+		return arr instanceof Array ? arr.slice() : Array.from(arr);
+	}
+
 
     // Private Classes for module
     class BasePredicate{
-		constructor(){
-			let args = Array.from(arguments)[0];
-			if(args != null){
-				this._Arguments = new Array(args.length);
-			} else {
-				this._Arguments = new Array(0);				
-			}
-			for(let i = 0; i < this._Arguments.length; ++i){
-				this._Arguments[i] = args[i];
-			}
+		constructor(argsObj){
+			for (var _len = argsObj.length, args = Array(_len), _key = 0; _key < _len; _key++) {
+			  args[_key] = argsObj[_key];
+			}			
+			this._Arguments = args;
 		}
 		//workaround until code can be fully ported to classes. Max/Min are only obstacles currently
-		static Apply(){
-			let args = Array.from(arguments)[0];
-			if(args != null){
-				this._Arguments = new Array(args.length);
-			} else {
-				this._Arguments = new Array(0);				
-			}
-			for(let i = 0; i < this._Arguments.length; ++i){
-				this._Arguments[i] = args[i];
-			}
+		static Apply(argsObj){
+			for (var _len = argsObj.length, args = Array(_len), _key = 0; _key < _len; _key++) {
+			  args[_key] = argsObj[_key];
+			}				
+			this._Arguments = args;
 			this.Reconstruct = function(){
-	            return Reflect.construct(this.constructor, this._Arguments);		
+	            return new this.constructor(...this._Arguments);
 			}
 		}
         Reconstruct() {
-	        return Reflect.construct(this.constructor, this._Arguments);		
+	        return new this.constructor(...this._Arguments);
         }
     }
-
+	class Enum{
+		constructor(){
+			let args = _.From(CloneArray(arguments)).Select(x=>x.toString());
+			let dupes = args.Duplicate();
+			if(dupes.Any()){
+				throw new Error(`Duplicate values in enumeration: ${dupes.ToString()}`);
+			}
+			this.All = args.ToArray();
+			for(let i = 0; i < this.All.length; i++){
+				this[this.All[i]] = i;
+			}
+			Object.freeze(this);
+		}
+		GetString(val){
+			return this.All[val];
+		}
+		GetValue(string){
+			for(let i = 0; i < this.All.length;i++){
+				if(this.All[i] == string){
+					return i;
+				}
+			}
+			return -1;
+		}
+	}
     class GroupInternal{
 		constructor(key){
 			this.Key = key;
@@ -138,7 +156,7 @@ let Enumerable = ((() => {
 
         // Flushes the hash and outputs as array
         Flush() {
-            let rtn = Array.from(this.Hash.values());
+            let rtn = CloneArray(this.Hash.values());
             this.Clear();
             return rtn;
         }
@@ -206,9 +224,17 @@ let Enumerable = ((() => {
         }
     }
 
-    function EnumeratorItem(val, done) {
-        this.Value = val;
-        this.Done = done;
+    class EnumeratorItem {
+		constructor(val, done){
+			this.Value = val;
+			this.Done = done;
+		}
+		get value(){
+			return this.Value;
+		}
+		get done(){
+			return this.Done;
+		}
     }
 
     class Enumerator {
@@ -295,8 +321,8 @@ let Enumerable = ((() => {
                 ResetPredicates(this.Enumerable.Predicates);
                 return new EnumeratorItem(undefined, true);
             }
-            let item = InvalidItem;
-            while (item === InvalidItem) {
+            let item = undefined;
+            while (item === undefined) {
                 this.Index++;
                 if (this.Index >= this.Data.length) {
                     this.Current = undefined;
@@ -308,11 +334,11 @@ let Enumerable = ((() => {
                 for (let j = 0, len2 = this.Enumerable.Predicates.length; j != len2; j++) {
                     let Predicate = this.Enumerable.Predicates[j];
                     item = Predicate.Execute(item, this.Index, this.Data.length);
-                    if (item === InvalidItem) {
+                    if (item === undefined) {
                         break;
                     }
                 }
-                if (item === InvalidItem) {
+                if (item === undefined) {
                     continue;
                 }
                 let done = this.Index >= this.Data.length;
@@ -380,19 +406,24 @@ let Enumerable = ((() => {
         }
 
         Call() {
-            let args = Array.from(arguments);
+            let args = CloneArray(arguments);
             let currentLevel = this.Cache;
             
             // Iterate thru arguments
             for(let i = 0; i < args.length; i++){
                 let arg = args[i];
+				if(arg instanceof Object){
+					arg = JSON.stringify(arg);
+				}
                 // Already cached this, fetch and continue
                 if(currentLevel.has(arg)){
                     currentLevel = currentLevel.get(arg);
                 } else {
                     // Not cached, and last level. Calculate the final value to cache
                     if(i >= args.length - 1){
-                        let val = this.Func(...args);
+						let callingArgs = CloneArray(args);
+						callingArgs.push(this);
+                        let val = this.Func(...callingArgs);
                         currentLevel.set(arg,val);
                         return val;
                     } else {
@@ -408,24 +439,18 @@ let Enumerable = ((() => {
 
     class MemoizeFuncAsync {
         constructor(func, callBack) {
-            let scope = this;
             this.Func = func;
             this.Cache = new Map();	
             this.Callback = callBack;
-            this.Events = new EventManager();
-            this.Events.BindEvent("OnResolve", (data, args)=>{
-                scope.SetCache(args,data);
-                callBack(data);
-            });
-            this.Events.BindEvent("OnReject", (data, args)=>{
-                callBack(data, args);
-            });
         }
 
         SetCache(args, value) {
             let currentLevel = this.Cache;
             for(let i = 0; i < args.length; i++){
                 let arg = args[i];
+				if(arg instanceof Object){
+					arg = JSON.stringify(arg);
+				}
                 // Already cached this
                 if(currentLevel.has(arg)){
                     // Overwrite the value in the cache
@@ -449,31 +474,35 @@ let Enumerable = ((() => {
             return value;
         }
 
-        Call() {
-            let args = Array.from(arguments);
+        async Call() {
+            let args = CloneArray(arguments);
             let currentLevel = this.Cache;
-            let token = new AsyncToken(this);
             let arg = null;
-            token.Events.BindEvent("OnResolve", (data) => {
-                this.Events.FireEvent("OnResolve", [data,args]);
-            });
-            token.Events.BindEvent("OnReject", (data) => {
-                this.Events.FireEvent("OnReject", [data, args]);
-            });
+			let scope = this;
             // Iterate thru arguments
             for(let i = 0; i < args.length; i++){
                 arg = args[i];
+				if(arg instanceof Object){
+					arg = JSON.stringify(arg);
+				}
                 // Already cached this, fetch and continue
                 if(currentLevel.has(arg)){
                     currentLevel = currentLevel.get(arg);
+					// Completely cached, return from cache
+					if(i == args.length -1){
+						scope.Callback(currentLevel);
+						return currentLevel;
+					}
                 } else {
                     // Not cached, and last level. Calculate the final value to cache
                     if(i >= args.length - 1){
-                        console.log("Fetching fresh async data")
-                        let newArgs = args.slice();
-                        newArgs.push(token);
-                        this.Func(...newArgs);
-                        return;
+						return new Promise( (resolve,reject) => {
+							this.Func.call(this,...args).then( v => {
+								scope.SetCache(args,v);
+								resolve(v);
+								scope.Callback(v);
+							});
+						});
                     } else {
                         // Not cached, but not at last level. Set this to a new Mapping
                         currentLevel.set(arg, new Map());
@@ -481,111 +510,10 @@ let Enumerable = ((() => {
                     }
                 }
             }
-            console.log("Sending back cached data");
-            this.Events.FireEvent("OnResolve",[currentLevel,args]);
+			return currentLevel;
         }
     }
-
-    class AsyncToken {
-        constructor(owner) {
-            this.Owner = owner;
-            this.Reason = new BaseReason();
-            this.Events = new EventManager();
-        }
-
-        Reject(data) {
-            this.Reason = new RejectReason(data);
-            this.Events.FireEvent("OnReject",[data]);
-        }
-
-        Resolve(data) {
-            this.Reason = new ResolveReason(data);
-            this.Events.FireEvent("OnResolve",[data]);
-        }
-
-        Clone() {
-            let token = new AsyncToken(this.Owner);
-            token.Reason = this.Reason;
-            token.Events = this.Events.Clone();
-            return token;
-        }
-    }
-
-    class BaseReason {
-        constructor(data) {
-            this.Data = data;
-        }
-
-        IsReject() {
-            return this instanceof RejectReason;
-        }
-
-        IsResolve() {
-            return this instanceof ResolveReason;
-        }
-    }
-
-	class RejectReason extends BaseReason{
-		constructor(data){
-			super(data);
-		}
-	}
-	class ResolveReason extends BaseReason{
-		constructor(data){
-			super(data);
-		}
-	}
 	
-    class EventManager {
-        constructor() {
-            this.Events = {};
-        }
-
-        FireEvent(evt, data) {
-            let events = this.Events[evt];
-            let rtn = true;
-            if (events !== undefined) {
-                for (let i = 0; i < events.length; i++) {
-                    let thisRtn = events[i].apply(this, data);
-                    if(thisRtn === false){
-                        rtn = false;
-                    }
-                }
-            }
-            return rtn;
-        }
-
-        BindEvent(evt, action) {
-            if (this.Events[evt] === undefined) {
-                this.Events[evt] = [];
-            }
-            this.Events[evt].push(action);
-        }
-
-        UnbindEvent(evt, action) {
-                if (this.Events[evt] !== undefined) {
-                    let newArr = [];
-
-                    for (let event of this.Events[evt]) {
-                        if (event !== action) {
-                            newArr.push(event);
-                        }
-                    }
-
-                    this.Events[evt] = newArr;
-                }
-            }
-
-        Clone() {
-            const em = new EventManager();
-            em.Events = {};
-            for(let prop in this.Events){
-                em.Events[prop] = this.Events[prop];
-            }
-            return em;
-        }
-    }
-
     // Private functions across module
     function ParseDataAsArray(data) {
         if (Array.isArray(data)) {
@@ -597,7 +525,7 @@ let Enumerable = ((() => {
         if (typeof data === "string") {
             return data.split("");
         }
-		let arr = Array.from(data);
+		let arr = CloneArray(data);
 		if(arr.length == data.length){
 			return arr;
 		}
@@ -630,7 +558,7 @@ let Enumerable = ((() => {
                 Data: data.split("")
             });
         }
-		let arr = Array.from(data);
+		let arr = CloneArray(data);
 		if(arr.length == data.length){
 		    return new Enumerable({
 				Data: arr
@@ -694,14 +622,14 @@ let Enumerable = ((() => {
         for (let len = data.length, i = 0; i !== len; i++) {
             let item = data[i];
             for (let j = 0, len2 = Predicates.length; j != len2; j++) {
-                let Predicate = Predicates[j];
-                item = Predicate.Execute(item, i, len);
-                if (item === InvalidItem) {
+                item = Predicates[j].Execute(item, i, len);
+                if (item === undefined) {
                     break;
                 }
             }
-            if (item !== InvalidItem) {
-                arr.push(item);
+            if (item !== undefined) {
+				idx++;
+                arr[idx]=(item);
             }
         }
         ResetPredicates(Predicates);
@@ -723,11 +651,11 @@ let Enumerable = ((() => {
             for (let j = 0, len2 = Predicates.length; j != len2; j++) {
                 let Predicate = Predicates[j];
                 item = Predicate.Execute(item, i, len);
-                if (item === InvalidItem) {
+                if (item === undefined) {
                     break;
                 }
             }
-            if (item === InvalidItem) {
+            if (item === undefined) {
                 continue;
             }
             idx++;
@@ -750,7 +678,12 @@ let Enumerable = ((() => {
         }
 		
         // Static methods for Enumerable
-
+		static Arrayify(input){
+			if(Array.isArray(input)){
+				return input;
+			}
+			return [input];
+		}
         //Modify Enumerable.prototype
         static Extend(extenderMethod) {
                 extenderMethod(Enumerable.prototype);
@@ -759,7 +692,10 @@ let Enumerable = ((() => {
 
         static From(data) {
                 return ParseDataAsEnumerable(data);
-            }
+        }
+		static CreateEnum(){
+			return new Enum(...arguments);
+		}
         // Public Static Methods
 
         static Range(start, count, step) {
@@ -803,7 +739,7 @@ let Enumerable = ((() => {
             let i = 0;
             while(arr.length != cnt){
                 let newVal = generator(i,arr);
-                if(newVal !== InvalidItem){
+                if(newVal !== undefined){
                     arr.push(newVal);
                 }
                 i++;
@@ -818,7 +754,7 @@ let Enumerable = ((() => {
             let i = 0;
             while(true){
                 let newVal = generator(i,arr);
-                if(newVal !== InvalidItem){
+                if(newVal !== undefined){
                     arr.push(newVal);
                 } else {
                     return ParseDataAsEnumerable(arr);				
@@ -878,24 +814,24 @@ let Enumerable = ((() => {
                     if (typeof Enumerable.prototype[prop] !== "function") {
                         continue;
                     }
-                    p[prop] = function(a,b,c,d,e,f,g,h,i,j,k,l) {
+					if(prop == "toString" || prop == "toJSON"){
+						continue;
+					}
+                    let val = function(a,b,c,d,e,f,g,h,i,j,k,l) {
                         let enumerable = new Enumerable({Data: dataGetter(this)});
                         if(arguments.length > 12){
                             return enumerable[prop](...arguments);
                         }
                         return enumerable[prop](a,b,c,d,e,f,g,h,i,j,k,l);
                     }
+					Object.defineProperty(p, prop, {value: val, enumerable: false });
                 }
                 if(addIterator){
                     object.prototype[Symbol.iterator] = function() {
                         let enumerator = this.GetEnumerator();
                         return {
                             next: () => {
-                                enumerator.Next();
-                                return {
-                                    value: enumerator.Current,
-                                    done: enumerator.Done
-                                };
+                                return enumerator.Next();
                             }
                         };
                     }
@@ -910,14 +846,15 @@ let Enumerable = ((() => {
                     if (typeof Enumerable.prototype[prop] !== "function") {
                         continue;
                     }
+					if(prop == "constructor" || prop == "toJSON"){
+						continue;
+					}
                     
-                    p[prop] = function(a,b,c,d,e,f,g,h,i,j,k,l) {
+                    let val = function() {
                         let enumerable = new Enumerable({Data: this});
-                        if(arguments.length > 12){
-                            return enumerable[prop](...arguments);
-                        }
-                        return enumerable[prop](a,b,c,d,e,f,g,h,i,j,k,l);
+                        return enumerable[prop].apply(enumerable,arguments);
                     }
+					Object.defineProperty(p, prop, {value: val, enumerable: false });
                 }	
 				_extendedObjects["Array"] = p;
         }
@@ -933,13 +870,16 @@ let Enumerable = ((() => {
                 let o = Object.create(thing.prototype);
                 let isArrayLike = (Symbol.iterator in Object(o));
                 if(isArrayLike){
-                    _.Inherit(thing,x=>Array.from(x),false);
+                    _.Inherit(thing,x=>CloneArray(x),false);
 					_extendedObjects[key] = thing.prototype;
                 }
             }
         }
 
         static NoConflict() {
+			if(window === undefined){
+				return;
+			}
             if (window._ !== PublicEnumerable) {
                 return PublicEnumerable;
             }
@@ -954,6 +894,23 @@ let Enumerable = ((() => {
 			return _extendedObjects;
 		}
     }
+	
+	function DeepFreeze(obj) {
+		  // Retrieve the property names defined on obj
+		  let propNames = Object.getOwnPropertyNames(obj);
+
+		  // Freeze properties before freezing self
+		  propNames.forEach(function(name) {
+			let prop = obj[name];
+
+			// Freeze prop if it is an object
+			if (typeof prop == 'object' && prop !== null)
+			  DeepFreeze(prop);
+		  });
+
+		  // Freeze self (no-op if already frozen)
+		  return Object.freeze(obj);
+	}	
 	let _extendedObjects = {};
 
     // The private constructor. Define EVERYTHING in here
@@ -962,22 +919,23 @@ let Enumerable = ((() => {
             let scope = this;
 
             // Private variables for module
-            scope.Data = [];
-            if (privateData.Data !== undefined) {
-                scope.Data = privateData.Data.slice();
-            }
-            scope.Predicates = [];
-            if (privateData.Predicates !== undefined) {
+            if (privateData.Predicates) {
                 scope.Predicates = privateData.Predicates.slice();
-            }
-            scope.ForEachActionStack = [DEFAULTFOREACHACTIONPREDICATE];
+				scope.Data = privateData.Data;
+            } else {
+				scope.Predicates = [];
+				scope.Data = privateData.Data.slice();
+			}
+			
             if (privateData.ForEachActionStack) {
                 scope.ForEachActionStack = privateData.ForEachActionStack.slice();
-            }
-            if (privateData.NewForEachAction !== undefined) {
+            } else {
+				 scope.ForEachActionStack = [DEFAULTFOREACHACTIONPREDICATE];
+			}
+            if (privateData.NewForEachAction) {
                 scope.AddToForEachStack(privateData.NewForEachAction);
             }
-            if (privateData.NewPredicate !== undefined) {
+            if (privateData.NewPredicate) {
                 scope.AddToPredicateStack(privateData.NewPredicate);
             }
         }
@@ -986,27 +944,33 @@ let Enumerable = ((() => {
             let scope = this;
 
             // Private variables for module
-            scope.Data = [];
-            if (privateData.Data !== undefined) {
-                scope.Data = privateData.Data.slice();
-            }
-            scope.Predicates = [];
-            if (privateData.Predicates !== undefined) {
+		
+            if (privateData.Predicates) {
                 scope.Predicates = privateData.Predicates.slice();
-            }
-            scope.ForEachActionStack = [DEFAULTFOREACHACTIONPREDICATE];
+				scope.Data = privateData.Data;
+            } else {
+				scope.Predicates = [];
+				scope.Data = privateData.Data.slice();
+			}
             if (privateData.ForEachActionStack) {
                 scope.ForEachActionStack = privateData.ForEachActionStack.slice();
-            }
-            if (privateData.NewForEachAction !== undefined) {
+            } else {
+				 scope.ForEachActionStack = [DEFAULTFOREACHACTIONPREDICATE];
+			}
+            if (privateData.NewForEachAction) {
                 scope.AddToForEachStack(privateData.NewForEachAction);
             }
-            if (privateData.NewPredicate !== undefined) {
+            if (privateData.NewPredicate) {
                 scope.AddToPredicateStack(privateData.NewPredicate);
             }
 		}
+		// toString override
 		toString(){
 			return `[${this.ToString(",")}]`;
+		}
+		// JSON.stringify override
+		toJSON(){
+            return this.ToJSON();
 		}
         AddToForEachStack(action) {
             let scope = this;
@@ -1024,7 +988,7 @@ let Enumerable = ((() => {
         }
 
         IsInvalidItem(item) {
-            return item == InvalidItem;
+            return item == undefined;
         }
 
         ToEnumerable() {
@@ -1032,11 +996,22 @@ let Enumerable = ((() => {
         }
 
         ToArray() {
-            let arr = this.Data;
-            arr = this.ForEachActionStack[this.ForEachActionStack.length - 1].Execute(arr);
-            arr = ProcessPredicates(this.Predicates, arr);
-            return arr;
+			if(this.Predicates.length == 0 && this.ForEachActionStack.length == 1){
+				return this.Data;
+			}
+			if(this.ForEachActionStack.length > 1){
+				return ProcessPredicates(this.Predicates,this.ForEachActionStack[this.ForEachActionStack.length - 1].Execute(this.Data));
+			}
+			return ProcessPredicates(this.Predicates,this.Data)
         }
+		Freeze(){
+			let arr = this.ToArray();
+			Object.freeze(arr);
+			return arr;
+		}
+		DeepFreeze(){
+			return DeepFreeze(this.ToArray())
+		}
 
         Flush() {
             let arr = this.ToArray();
@@ -1077,7 +1052,7 @@ let Enumerable = ((() => {
         }
 
         ToJSON() {
-            let arr = this.ToArray();
+			let arr = this.ToArray();
             return JSON.stringify(arr);
         }
 
@@ -1099,10 +1074,14 @@ let Enumerable = ((() => {
         }
 
         ForEach(action, closureObject) {
-            let arr = this.Data;
-            arr = this.ForEachActionStack[this.ForEachActionStack.length - 1].Execute(arr);
-            ProcessPredicatesNoReturn(this.Predicates, arr, action, closureObject);
-            return;
+			if(this.ForEachActionStack.lengthg > 1){
+				ProcessPredicatesNoReturn(this.Predicates,
+				this.ForEachActionStack[this.ForEachActionStack.length - 1].Execute(this.Data),
+				action, 
+				closureObject);
+			} else {
+				ProcessPredicatesNoReturn(this.Predicates, this.Data, action, closureObject);
+            }
         }
 
         MemoEach(cache, action) {
@@ -1113,59 +1092,12 @@ let Enumerable = ((() => {
                 action(val);
             });
         }
-
-        MemoEachAsync(cache, action) {
-            let pending = new Map();
-            let waitList = new Map();
-            action = action || function memoEachAsyncDoNothing(){};
-            let memo = new MemoizeFuncAsync(cache,action);
-            memo.Events.BindEvent("OnResolve", (val, args) => {
-                let v = args[0];
-                if(waitList.has(v)){
-                    let wait = waitList.get(v);
-                    for(let i = 0; i < wait.length; i++){
-                        action(val);
-                    }
-                    waitList.delete(v);
-                }
-                if(pending.has(v)){
-                    pending.delete(v);
-                }
-            });
-            // Cache was denied, fetch fresh value
-            memo.Events.BindEvent("OnReject", (val, args) => {
-                let v = args[0];
-                if(waitList.has(v)){
-                    let wait = waitList.get(v);
-                    let first = wait[0];
-                    if(first !== undefined){
-                        wait.splice(0,1);
-                        if(wait.length === 0){
-                            if(pending.has(v)){
-                                pending.delete(v);
-                            }	
-                        }
-                        memo.Call(first);
-                        return;
-                    }
-                }
-            });
-            this.ForEach((i, v) => {
-                if(pending.has(v) === false){
-                    pending.set(v,true);
-                    waitList.set(v,[]);
-                    memo.Call(v);
-                } else {
-                    waitList.get(v).push(v);
-                }
-            });
-        }
-
+	
         Where(pred) {
             let scope = this;
             let data = CreateDataForNewEnumerable(scope);
-            data.WherePredicate = new WherePredicate(pred);
-            return new FilteredEnumerable(data);
+            data.NewPredicate = new WherePredicate(pred);
+            return new Enumerable(data);
         }
 
         Select(pred) {
@@ -1204,7 +1136,27 @@ let Enumerable = ((() => {
             data.NewPredicate = new DistinctPredicate(pred);
             return new Enumerable(data);
         }
+        Duplicate(pred) {
+            let scope = this;
+            let data = CreateDataForNewEnumerable(scope);
+            data.NewForEachAction = arr => {
+                let set = new Set();
+				let dupesSet = new Set();
+                for (let item of arr) {
+					let i = item;
+					if(pred){
+						i = pred(item);
+					}
+					if(set.has(i)){
+						dupesSet.add(i);
+					}
+					set.add(i);
+                }
 
+                return CloneArray(dupesSet);
+            }
+            return new Enumerable(data);
+        }
         Skip(cnt) {
             let scope = this;
             let data = CreateDataForNewEnumerable(scope);
@@ -1288,9 +1240,15 @@ let Enumerable = ((() => {
         }
 
         First(pred) {
-            let scope = this;
-            let p = new FirstPredicate(pred);
-            return p.Execute(scope).First;
+			
+            for(let item of this.ToArray()){
+				if(pred == null){
+					return item;
+				}
+				if(pred(item)){
+					return item;
+				}
+			}
         }
 
         Single(pred) {
@@ -1344,7 +1302,7 @@ let Enumerable = ((() => {
         Any(pred) {
             let scope = this;
             let first = scope.First(pred);
-            return first !== null;
+            return first !== undefined;
         }
 
         All(pred) {
@@ -1876,7 +1834,28 @@ let Enumerable = ((() => {
             }
             return true;
         }
-
+        Statistics(pred){
+			let rtn = {
+				Count: this.Count(pred),
+				Average: this.Average(pred),
+				StdDev: this.StdDev(pred),
+				Variance: this.Variance(pred),
+				Range: this.Range(pred),
+				First: this.First(pred),
+				Last: this.Last(pred),
+				Median: this.Median(pred),
+				Mode: this.Mode(pred),
+				Sum: this.Sum(pred),
+				Product: this.Product(pred),
+				RangeBy: this.RangeBy(pred)
+			}
+			rtn.Mode = rtn.Mode.ToArray();
+			rtn.RangeBy.Min = rtn.RangeBy.Min.ToArray();
+			rtn.RangeBy.Max = rtn.RangeBy.Max.ToArray();
+			
+			return rtn;
+			
+		}
         Average(pred) {
             let scope = this;
             let arr = scope.ToArray();
@@ -1986,9 +1965,21 @@ let Enumerable = ((() => {
             for(let item of optClone){
                 if(item.OptimizeOption == Enumerable.Enums.OptimizeOptions.Min){
                     item.CompareValue = Number.POSITIVE_INFINITY;
-                } else {
+                }
+				else if(item.OptimizeOption == Enumerable.Enums.OptimizeOptions.Max){
                     item.CompareValue = Number.NEGATIVE_INFINITY;
                 }
+				else if(item.OptimizeOption == Enumerable.Enums.OptimizeOptions.SumMin){
+					item.CompareValue = Number.POSITIVE_INFINITY;
+					item.Sum = 0;
+				}
+				else if(item.OptimizeOption == Enumerable.Enums.OptimizeOptions.SumMax){
+	                item.CompareValue = Number.NEGATIVE_INFINITY;	
+					item.Sum = 0;
+				}
+				if(item.Predicate == null){
+					item.Predicate = Enumerable.Functions.Identity;
+				}
             }
             for(let item of data){
                 for(let opt of optClone){
@@ -1997,11 +1988,28 @@ let Enumerable = ((() => {
                         if(pVal < opt.CompareValue){
                             opt.CompareValue = pVal;
                         }
-                    } else {
+                    } 
+					else if(opt.OptimizeOption == Enumerable.Enums.OptimizeOptions.Max){
                         if(pVal > opt.CompareValue){
                             opt.CompareValue = pVal;
                         }
                     }
+					else if(opt.OptimizeOption == Enumerable.Enums.OptimizeOptions.SumMin){
+						opt.Sum += pVal;
+						if(opt.Sum < opt.CompareValue){
+							opt.CompareValue = opt.Sum;
+						}
+					}
+					else if(opt.OptimizeOption == Enumerable.Enums.OptimizeOptions.SumMax){
+						opt.Sum += pVal;
+						if(opt.Sum > opt.CompareValue){
+							opt.CompareValue = opt.Sum;
+						}						
+					}
+					else if(opt.OptimizeOption == Enumerable.Enums.OptimizeOptions.Custom){
+						opt.Evaluate(pVal);
+					}
+					
                 }
             }
             return _.From(optClone).Select(x=>x.CompareValue).ToArray();
@@ -2082,7 +2090,15 @@ let Enumerable = ((() => {
         Remove(item) {
             return this.RemoveRange([item]);
         }
+		Fill(value,start,end){
+            let scope = this;
+            let dataToPass = CreateDataForNewEnumerable(scope);
 
+            dataToPass.NewForEachAction = arr => {
+                return arr.fill(value,start,end);
+            }
+            return new Enumerable(dataToPass);
+		}
         RemoveAt(idx, cnt) {
             let scope = this;
             let dataToPass = CreateDataForNewEnumerable(scope);
@@ -2298,12 +2314,18 @@ let Enumerable = ((() => {
                 symbol = "";
             }
             let rtn = "";
-            if (!pred) {
-                rtn = scope.Aggregate((curr, next) => curr + symbol + next);
-                return rtn === null ? "" : rtn;
-            }
-            rtn = scope.Aggregate((curr, next) => curr + symbol + pred(next));
-            return rtn === null ? "" : rtn;
+			let addSymbol = false;
+			for(let item of this){
+				if(addSymbol){
+					rtn += symbol;
+				}
+				if(pred){
+					item = pred(item);
+				}
+				rtn += item;
+				addSymbol = true;
+			}
+            return rtn;
         }
 
         WriteLine(pred) {
@@ -2416,32 +2438,9 @@ let Enumerable = ((() => {
         AsyncSequential() {
             return new AsyncSequential(this);
         }
-
-        static CreateSortFunction(pred, desc) {
-            if (desc) {
-                return (a, b) => {
-                    let aa = pred(a);
-                    let bb = pred(b);
-                    return Enumerable.Functions.SortDesc(aa, bb);
-                }
-            }
-            return (a, b) => {
-                let aa = pred(a);
-                let bb = pred(b);
-                return Enumerable.Functions.SortAsc(aa, bb);
-            }
-        }
-
-        static CreateCompositeSortFunction(oldComparer, pred, desc) {
-            let newSort = Enumerable.CreateSortFunction(pred, desc);
-            return (a, b) => {
-                let initialResult = oldComparer(a, b);
-                if (initialResult !== 0) {
-                    return initialResult;
-                }
-                return newSort(a, b);
-            }
-        }
+		async ParallelEach(action){
+			return PublicEnumerable.Parallel.ForEach(this,action);
+		}
     }
 
 
@@ -2461,50 +2460,47 @@ let Enumerable = ((() => {
 		this.OldPredicates = scope.Predicates.slice();
 		scope.Predicates = [];
 		this.Action = action;
-		this.Execute = function(arr){
-            let newArr = this.OldForEachActionPredicate.Execute(arr);
-            newArr = ProcessPredicates(this.OldPredicates, newArr);
-            newArr = this.Action(newArr);
-            return newArr;			
+		this.Execute = function(arr){	
+			return this.Action(
+				ProcessPredicates(this.OldPredicates,
+					this.OldForEachActionPredicate.Execute(arr)
+				)
+			)
 		}
 	}
     Enumerable.prototype[Symbol.iterator] = function() {
         let enumerator = this.GetEnumerator();
         return {
             next: () => {
-                enumerator.Next();
-                return {
-                    value: enumerator.Current,
-                    done: enumerator.Done
-                };
+                return enumerator.Next();
             }
         };
     }
 
-    class WherePredicate extends BasePredicate{
+    class WherePredicate {
         constructor(pred) {
-            super(arguments);
+            //super(arguments);
             this.Predicate = pred;
 
         }
-
+		Reconstruct(){
+			return new WherePredicate(this.Predicate);
+		}
         Execute(item, i) {
-            let passed = this.Predicate(item, i);
-            if (passed) {
-                return item;
-            }
-            return InvalidItem;
+            return this.Predicate(item, i) ? item : undefined;
         }
 
         Reset() {}
     }
 
-    class SelectPredicate extends BasePredicate{
+    class SelectPredicate {
         constructor(pred) {
-            super(arguments);
+           // super(arguments);
             this.Predicate = pred;
         }
-
+		Reconstruct(){
+			return new SelectPredicate(this.Predicate);
+		}
         Execute(item, i) {
             return this.Predicate(item, i)
         }
@@ -2512,12 +2508,15 @@ let Enumerable = ((() => {
         Reset() {}
     }
 
-    class DistinctPredicate extends BasePredicate{
+    class DistinctPredicate {
         constructor(pred) {
-            super(arguments);
+            //super(arguments);
+			this._pred = pred;
             this.Hash = new HashMap(pred);
         }
-
+		Reconstruct(){
+			return new DistinctPredicate(this._pred);
+		}
         Predicate(item) {
             // returns undefined in failed, otherwise returns the item
             let result = this.Hash.TryAdd(item);
@@ -2535,17 +2534,18 @@ let Enumerable = ((() => {
         }
     }
 
-    class SkipPredicate extends BasePredicate{
+    class SkipPredicate {
         constructor(cnt) {
-            super(arguments);
             this.Skipped = 0;
             this.SkipCount = cnt;
         }
-
+		Reconstruct(){
+			return new SkipPredicate(this.SkipCount);
+		}
         Predicate(item) {
                 if (this.Skipped < this.SkipCount) {
                     this.Skipped++;
-                    return InvalidItem;
+                    return undefined;
                 }
                 return item;
         }
@@ -2559,20 +2559,21 @@ let Enumerable = ((() => {
         }
     }
 
-    class SkipWhilePredicate extends BasePredicate{
+    class SkipWhilePredicate {
         constructor(pred) {
-            super(arguments);
             this.CanSkip = true;
             this._predicate = pred;
         }
-
+		Reconstruct(){
+			return new SkipWhilePredicate(this._predicate);
+		}
         Predicate(item) {
             if (!this.CanSkip) {
                 return item;
             }
             this.CanSkip = pred(item);
             if (this.CanSkip) {
-                return InvalidItem;
+                return undefined;
             }
             return item;
         }
@@ -2586,18 +2587,19 @@ let Enumerable = ((() => {
         }
     }
 
-    class TakePredicate extends BasePredicate{
+    class TakePredicate {
         constructor(cnt) {
-            super(arguments);
             this.Took = 0;
             this.TakeCount = cnt;
             this.CanTake = true;
         }
-
+		Reconstruct(){
+			return new TakePredicate(this.TakeCount);
+		}
         Predicate(item) {
             if (this.Took >= this.TakeCount) {
                 this.CanTake = false;
-                return InvalidItem;
+                return undefined;
             }
             this.Took++;
             return item;
@@ -2613,20 +2615,21 @@ let Enumerable = ((() => {
         }
     }
 
-    class TakeWhilePredicate extends BasePredicate{
+    class TakeWhilePredicate {
         constructor(pred) {
-            super(arguments);
             this.CanTake = true;
             this._predicate = pred;
         }
-
+		Reconstruct(){
+			return new TakeWhilePredicate(this._predicate);
+		}
         Predicate(item) {
             if (!this.CanTake) {
-                return InvalidItem;
+                return undefined;
             }
             this.CanTake = pred(item);
             if (!this.CanTake) {
-                return InvalidItem;
+                return undefined;
             }
             return item;
         }
@@ -2640,9 +2643,8 @@ let Enumerable = ((() => {
         }
     }
 
-    class FirstPredicate extends BasePredicate {
+    class FirstPredicate {
 		constructor(pred){
-			super(arguments);
 			this._SCOPE = this;
 			this._predicate = pred;
 			this._first = null;
@@ -2652,6 +2654,9 @@ let Enumerable = ((() => {
 			} else {
 				this.Predicate = this.PRED_METHOD.bind(this);
 			}
+		}
+		Reconstruct(){
+			return new FirstPredicate(this._predicate);
 		}
 		NULL_PRED_METHOD(i, v){
 			this._SCOPE._first = v;
@@ -2678,12 +2683,14 @@ let Enumerable = ((() => {
 			this._firstIndex = -1;
 		}
     }
-    class LastPredicate extends BasePredicate {
+    class LastPredicate {
 		constructor(pred){
-			super(arguments);
 			this.Predicate = pred;
 			this._last = null;
 			this._lastIndex = -1;
+		}
+		Reconstruct(){
+			return new LastPredicate(this.Predicate);
 		}
         Execute(SCOPE) {
             let arr = SCOPE.ToArray();
@@ -2716,13 +2723,14 @@ let Enumerable = ((() => {
         }
     }
 
-    class AllPredicate extends BasePredicate{
+    class AllPredicate {
         constructor(pred) {
-            super(arguments);
             this._predicate = pred;
             this._all = true;
         }
-
+		Reconstruct(){
+			return new AllPredicate(this._predicate);
+		}
         Predicate(i, v) {
             if (this._predicate(v) === false) {
                 this._all = false;
@@ -2740,15 +2748,16 @@ let Enumerable = ((() => {
         }
     }
 
-    class UnionPredicate extends BasePredicate{
+    class UnionPredicate {
         constructor(items, pred, pred2) {
-            super(arguments);
             let scope = this;
             this.Items = items;
             this.Predicate = pred || (x => x)
             this.Predicate2 = pred2 || (x => x)
         }
-
+		Reconstruct(){
+			return new UnionPredicate(this.Items,this.Predicate,this.Predicate2);
+		}
         Reset() {}
 
         Execute(arr) {
@@ -2778,14 +2787,15 @@ let Enumerable = ((() => {
         }
     }
 
-    class IntersectPredicate extends BasePredicate{
+    class IntersectPredicate {
         constructor(items, pred, pred2) {
-            super(arguments);
             this.Items = items;
             this.Predicate = pred || (x => x)
             this.Predicate2 = pred2 || (x => x)
         }
-
+		Reconstruct(){
+			return new IntersectPredicate(this.Items,this.Predicate,this.Predicate2);
+		}
         Reset() {}
 
         Execute(arr) {
@@ -2817,15 +2827,15 @@ let Enumerable = ((() => {
         }
     }
 
-    class DisjointPredicate extends BasePredicate{
+    class DisjointPredicate {
         constructor(items, pred, pred2) {
-            super(arguments);
-            let scope = this;
             this.Items = items;
             this.Predicate = pred || (x => x)
             this.Predicate2 = pred2 || (x => x)
         }
-
+		Reconstruct(){
+			return new DisjointPredicate(this.Items,this.Predicate,this.Predicate2);
+		}
         Reset() {}
 
         Execute(arr) {
@@ -2862,15 +2872,16 @@ let Enumerable = ((() => {
         }
     }
 
-    class SplitPredicate extends BasePredicate{
+    class SplitPredicate {
         constructor(pred, includeSplitter) {
-            super(Array.from(arguments));
             this.Predicate = pred;
             this.IncludeSplitter = includeSplitter;
             this.CurrentGroup = [];
             this.NeedsFlush = false;
         }
-
+		Reconstruct(){
+			return new SplitPredicate(this.Predicate,this.IncludeSplitter);
+		}
         Reset() {
             this.CurrentGroup = [];
             this.NeedsFlush = false;
@@ -2903,9 +2914,8 @@ let Enumerable = ((() => {
         }
     }
 
-    class SplitByPredicate extends BasePredicate{
+    class SplitByPredicate {
         constructor(sequence, pred, includeSplitter) {
-            super(Array.from(arguments));
             this.Predicate = pred || this._defaultPred;
             this.IncludeSplitter = includeSplitter;
             this.CurrentGroup = [];
@@ -2913,6 +2923,9 @@ let Enumerable = ((() => {
             this.Sequence = ParseDataAsArray(sequence);
             this.NeedsFlush = false;
         }
+		Reconstruct(){
+			return new SplitByPredicate(this.Sequence,this.Predicate,this.IncludeSplitter);
+		}
 		_defaultPred(a, b){
 			return a === b
 		}
@@ -2964,13 +2977,14 @@ let Enumerable = ((() => {
         }
     }
 
-    class BatchPredicate extends BasePredicate{
+    class BatchPredicate {
         constructor(cnt) {
-            super(Array.from(arguments));
             this.CurrentSequence = [];
             this.BatchSize = cnt;	
         }
-
+		Reconstruct(){
+			return new BatchPredicate(this.BatchSize);
+		}
         Reset() {
             this.CurrentSequence = [];
         }
@@ -3175,13 +3189,14 @@ let Enumerable = ((() => {
         }
     }
 
-    class RemovePredicate extends BasePredicate {
+    class RemovePredicate {
         constructor(items) {
-            super(arguments);
             this.Items = ParseDataAsEnumerable(items);
             this.ItemsToCheck;		
         }
-
+		Reconstruct(){
+			return new RemovePredicate(this.Items);
+		}
         Reset() {
             this.Items = this.Items.Memoize();
             let arr = this.Items.ToArray();
@@ -3209,19 +3224,20 @@ let Enumerable = ((() => {
             } else {
                 this.ItemsToCheck.set(item, arr.slice(0));
             }
-            return InvalidItem;
+            return undefined;
         }
     }
 
-    class RemoveAtPredicate extends BasePredicate {
+    class RemoveAtPredicate {
         constructor(idx, cnt) {
-            super(arguments);
             this.Index = idx;
             this.Count = cnt || 1;
             this.RemoveCount = 0;
             this.BeganRemove = false;      		
         }
-
+		Reconstruct() {
+			return new RemoveAtPredicate(this.Index,this.Count);
+		}
         Reset() {
             this.RemoveCount = 0;
             this.BeganRemove = false;
@@ -3234,7 +3250,7 @@ let Enumerable = ((() => {
             if(this.BeganRemove === true){
                 if(this.RemoveCount < this.Count){
                     this.RemoveCount++;
-                    return InvalidItem;
+                    return undefined;
                 }
             }
             return item;
@@ -3255,19 +3271,20 @@ let Enumerable = ((() => {
 		ForEachActionPredicate.apply(this,[scope,arr => arr.slice(0,Math.max(0,arr.length - that.PopCount))]);
 	}
 
-    class CatchPredicate extends BasePredicate{
+    class CatchPredicate {
         constructor(handler, refPred) {
-            super(arguments);
             this.Handler = handler;
             this.HandledPredicate = refPred;
         }
-
+		Reconstruct(){
+			return new CatchPredicate(this.Handler,this.HandledPredicate);
+		}
         Predicate(item) {
             try {
                 return this.HandledPredicate.Execute(item);
             } catch (e) {
                 this.Handler(e, item);
-                return InvalidItem;
+                return undefined;
             }
         }
 
@@ -3278,12 +3295,13 @@ let Enumerable = ((() => {
         }
     }
 
-    class TracePredicate extends BasePredicate{
+    class TracePredicate {
         constructor(msg) {
-            super(arguments);
             this.Message = msg;
         }
-
+		Reconstruct(){
+			return new TracePredicate(this.Message);
+		}
         Predicate(item) {
             console.log(this.Message, ":", item);
             return item;
@@ -3297,181 +3315,102 @@ let Enumerable = ((() => {
     }
 
     class AsyncParallel {
-        constructor(enumerable, interval) {
-            this.Token = new AsyncToken(this);
-            this.Enumerator = new EnumeratorCollection();
-            this.Enumerator.AddItems(enumerable);
-            this.Interval = interval;
-            this.Canceled = false;
-            this.CompleteCount = 0;
-            this.TotalCount = 0;
-            this.Action = null;
-            this.Events = new EventManager();
+        constructor(enumerable) {
+            this.Items = ParseDataAsEnumerable(enumerable);
         }
 
-        ForEach(action) {
-            let scope = this;
-            let completed = false;
-            let rejected = false;
-            scope.Token.Events.BindEvent("OnResolve", (data)=>{
-                scope.CompleteCount++;
-                if(rejected === true){
-                    return;
-                }
-                scope.Events.FireEvent("OnResolve", [data]);
-                tryOnComplete();
-            });
-            scope.Token.Events.BindEvent("OnReject", (data)=>{
-                if(rejected === true){
-                    return;
-                }
-                rejected = true;
-                scope.Events.FireEvent("OnReject", [data]);
-                return;		
-            });
-            scope.Events.BindEvent("OnComplete", data => {
-                completed = true;
-            });
-            
-            let tryOnComplete = () => {
-                if(completed === true || rejected === true){
-                    return false;
-                }
-                if(scope.CompleteCount === scope.TotalCount && scope.Enumerator.Current === undefined){
-                    scope.Events.FireEvent("OnComplete");
-                    return false;
-                }
-                return true;			
-            }
-            let Iteration = () => {
-                setTimeout(function asyncForEachIteration() {
-                    let next = scope.Enumerator.Next();
-                    // Not finished yet
-                    if (next.Value !== undefined) {
-                        scope.TotalCount++;
-                        let token = scope.Token.Clone();
-                        try{
-                            action(next.Value,token);
-                            Iteration();
+		 async ForEach(action){
+			 let promises = [];
+			 let idx = -1;
+			 let scope = this;
+			 for(let item of this.Items){
+				idx++;
+				let promise = action(idx,item);
+				promises.push(promise);
+			}
+			return Promise.all(promises);
+		 }
+		async MemoEach(cache,action){
+            let pending = new Map();
+            let waitList = new Map();
+            action = action || function memoEachAsyncDoNothing(){};
+			let getKey = v => {
+				if(v instanceof Object){
+					return JSON.stringify(v);
+				}
+				return v;
+			};
+            let memo = new MemoizeFuncAsync(cache,action);
+
+			/*
+            // Cache was denied, fetch fresh value
+            memo.Events.BindEvent("OnReject", (val, args) => {
+                let v = args[0];
+				let key = getKey(v);
+                if(waitList.has(v)){
+                    let wait = waitList.get(key);
+                    let first = wait[0];
+                    if(first !== undefined){
+                        wait.splice(0,1);
+                        if(wait.length === 0){
+                            if(pending.has(key)){
+                                pending.delete(key);
+                            }	
                         }
-                        catch(e){
-                            try{
-                                // Fire the OnError event, which let's us know if we should continue
-                                scope.Events.FireEvent("OnError",[e,token]);
-                                if(token.Reason.IsReject() === false){
-                                    Iteration();
-                                }
-                            }
-                            catch(e2){
-                                token.Reject(e2);
-                            }
-                        }
-                    } else {
-                        scope.Events.FireEvent("OnEnumerationComplete", []);
-                        tryOnComplete();
+                        memo.Call(first.value);
                         return;
                     }
-                }, scope.Interval);
-            }
-            
-            //Kick off the events
-            Iteration();
-            return scope.Token;
-        }
-
-        Then(item) {
-            this.Enumerator.AddItem(item);
-            return this;
-        }
-
-        Catch(handler) {
-            this.Events.BindEvent("OnError",handler);
-            return this;
-        }
-
-        Finally(onDone) {
-            this.Events.BindEvent("OnComplete",onDone);	
-            return this;
-        }
-
-        FinallyEnumerated(onDone) {
-            this.Events.BindEvent("OnEnumerationComplete",onDone);		
-            return this;
-        }
+                }
+            });*/
+			
+            let rtn = this.ForEach((i,v) => {
+				let key = getKey(v);
+                if(pending.has(key) === true){
+					waitList.get(key).push({index:i,value:v});
+					return;
+				}
+				pending.set(key,true);
+				waitList.set(key,[]);
+				memo.Call(v).then(v2=>{
+					let key = getKey(v2);
+					if(waitList.has(key)){
+						let wait = waitList.get(key);
+						for(let waitItem of wait){
+							action(waitItem.value);
+						}
+						waitList.delete(key);
+					}
+					if(pending.has(key)){
+						pending.delete(key);
+					}						
+				});
+            });	
+			return rtn;
+		}
     }
 
     class AsyncSequential {
         constructor(enumerable) {
-            this.Token = new AsyncToken(this);
-            this.Enumerator = new EnumeratorCollection();
-            this.Enumerator.AddItems(enumerable);
-            this.Events = new EventManager();		
+            this.Items = ParseDataAsEnumerable(enumerable);		
         }
 
-        ForEach(action) {
-            let scope = this;
-            let rejected = false;
-            scope.Token.Events.BindEvent("OnResolve", (data)=>{
-                if(rejected === true){
-                    return;
-                }
-                scope.Events.FireEvent("OnResolve", [data]);
-                if(scope.Enumerator.Current === undefined){
-                    scope.Events.FireEvent("OnComplete", [scope.Token.Reason.Data]);
-                    return;
-                }
-                Iteration();			
-            });
-            
-            scope.Token.Events.BindEvent("OnReject", (data)=>{
-                if(rejected === true){
-                    return;
-                }
-                rejected = true;
-                scope.Events.FireEvent("OnReject", [data]);
-                return;		
-            });
-            
-            let Iteration = () => {
-                if(rejected === true){
-                    return;
-                }
-                let next = scope.Enumerator.Next();
-                if(next.Value === undefined){
-                    scope.Events.FireEvent("OnComplete", [scope.Token.Reason.Data]);
-                    return;				
-                }
-                try{
-                    action(next.Value,scope.Token);
-                } 
-                catch(e){
-                    try{
-                        // Fire the OnError event, which let's us know if we should continue
-                        scope.Events.FireEvent("OnError",[e,scope.Token]);
-                    }
-                    catch(e2){
-                        scope.Token.Reject(e2);
-                    }
-                }
-            }
-            Iteration();
-            return scope.Token;
-        }
-
-        Then(item) {
-            this.Enumerator.AddItem(item);
-            return this;
-        }
-
-        Catch(handler) {
-            this.Events.BindEvent("OnError",handler);
-            return this;
-        }
-
-        Finally(onDone) {
-            this.Events.BindEvent("OnComplete",onDone);	
-            return this;
-        }
+		 async ForEach(action){
+			 let idx = -1;
+			 let scope = this;
+			for(let item of this.Items){
+				idx++;
+				await action(idx,item);
+			}
+		 }
+		async MemoEach(cache,action){
+			let scope = this;
+			let memo = new MemoizeFuncAsync(cache,action);
+			
+			let rtn = this.ForEach( (i,v) => {
+				return memo.Call(v);
+			});
+			return rtn;
+		}
     }
 
     let OrderPredicate = function(pred, desc) {
@@ -3646,12 +3585,12 @@ let Enumerable = ((() => {
         }
 
         get Keys() {
-            let rtn = Array.from(this._map.keys());
+            let rtn = CloneArray(this._map.keys());
             return ParseDataAsEnumerable(rtn);
         }
 
         get Values() {
-            let rtn = Array.from(this._map.values());
+            let rtn = CloneArray(this._map.values());
             return ParseDataAsEnumerable(rtn);
         }
 
@@ -3730,7 +3669,10 @@ let Enumerable = ((() => {
         GetEnumerator() {
             return new MapEnumerator(this._map);
         }
-
+        ToJSON() {
+            let str = this.Select(kvp=>`"${kvp.Key}":${JSON.stringify(kvp.Value)}`).Write(",");
+            return `{${str}}`;
+        }
         Clone() {
             const dict = new Dictionary();
             dict._map = new Map(this._map);
@@ -3762,6 +3704,11 @@ let Enumerable = ((() => {
             }
             scope._map.get(key).Data.push(value);
         }
+		
+		ToJSON() {
+            let str = this.Select(kvp=>`"${kvp.Key}":${JSON.stringify(kvp.Value.ToArray())}`).Write(",");
+            return `{${str}}`;
+        }
 
         Set(key, value) {
             let scope = this;
@@ -3775,7 +3722,115 @@ let Enumerable = ((() => {
             return dict;
         }
     }
+    PublicEnumerable.Lookup = Lookup;
+	PublicEnumerable.Dictionary = Dictionary;
+	PublicEnumerable.Parallel = (()=>{
+	 async function partitionSpawn(items,action){
+		  let partitions = items.Batch(Math.ceil(items.Count()/8)).ToArray();
 
+		  let promises = [];
+		  let offset = 0;
+		  for(let set of partitions){
+			  let item = {
+				Items: set.ToArray(),
+				Offset: offset
+			  };
+			  let promise = spawn(item,action);
+			  promises.push(promise);
+			  offset += item.Items.length;
+		  }
+		  return Promise.all(promises);
+	  }
+	  async function spawn(items,action){
+		  let pResolve = null;
+		  let promise = new Promise( (resolve,reject)=>{
+			  pResolve = resolve;
+		  });
+		  let blob = new Blob(
+			[`try{
+				  let obj = ${JSON.stringify(items)};
+				  let rtn = [];
+				  let idx = obj.Offset;
+				  for(let item of obj.Items){
+					  rtn.push(${action.toString()}(item,idx));
+					  idx++;
+				  }
+				  self.postMessage(rtn);
+				}
+				catch(e){
+					self.postMessage("Error:" + e.message + e.stack);
+				}`
+									 ], 
+			   { type: "application/javascript" });
+
+		  let blobURL = URL.createObjectURL(blob)
+		  // Note: window.webkitURL.createObjectURL() in Chrome 10+.
+		  let worker = new Worker(blobURL);
+		  worker.onmessage = function(e) {
+			pResolve(e.data);
+			URL.revokeObjectURL(blobURL);
+			worker.terminate();
+		  }
+		  return promise;
+		}	
+		
+		async function Join(promise){
+			var rtn = [];
+			var results = await promise;
+			if(results == null){
+				return rtn;
+			}
+			for(let result of results){
+				rtn = rtn.concat(result);
+			}
+			return rtn;
+		}
+			
+		class Parallel{
+			static async For(a,b,action){
+				let rng = PublicEnumerable.Range(a,b-a + 1).ToArray();
+				return Join(partitionSpawn(rng,action));
+			}
+			static async ForEach(collection,action){
+				let rng = ParseDataAsArray(collection);
+				return Join(partitionSpawn(rng,action));
+			}
+		}
+		return Parallel;
+		
+	})();
+	
+	PublicEnumerable.Async = (()=>{
+		
+		class Async{
+			static async ForSequential(a,b,action){
+				let rng = PublicEnumerable.Range(a,b-a + 1).ToArray();
+				return rng.AsyncSequential().ForEach(action);
+			}
+			static async ForEachSequential(collection,action){
+				let rng = ParseDataAsArray(collection);
+				return rng.AsyncSequential().ForEach(action);
+			}
+			static async MemoSequential(collection,cache,action){
+				let rng = ParseDataAsArray(collection);
+				return rng.AsyncSequential().MemoEach(cache,action);	
+			}
+			static async ForParallel(a,b,action){
+				let rng = PublicEnumerable.Range(a,b-a + 1).ToArray();
+				return rng.AsyncParallel().ForEach(action);
+			}
+			static async ForEachParallel(collection,action){
+				let rng = ParseDataAsArray(collection);
+				return rng.AsyncParallel().ForEach(action);
+			}
+			static async MemoParallel(collection,cache,action){
+				let rng = ParseDataAsArray(collection);
+				return rng.AsyncParallel().MemoEach(cache,action);
+			}
+		}
+		return Async;
+		
+	})();	
 
     function ProfileItem(data,time){
 		this.Data = data;
@@ -3784,7 +3839,10 @@ let Enumerable = ((() => {
     Enumerable.Enums = {};
     Enumerable.Enums.OptimizeOptions = {
 		Min: "Min",
-		Max: "Max"
+		Max: "Max",
+		SumMin: "SumMin",
+		SumMax: "SumMax",
+		Custom: "Custom"
 	}
     // Internal Utilities
     Enumerable.Functions = {};
@@ -3813,17 +3871,171 @@ let Enumerable = ((() => {
         return 0;
     }
     Enumerable.Functions.ShuffleSort = (a, b) => -0.5 + Math.random()
+	Enumerable.Functions.Identity = (x) => x;
 
     // Misc code
     for (let prop in Enumerable.prototype) {
         Group.prototype[prop] = function() {
-            return this.Items[prop](...Array.from(arguments));
+            return this.Items[prop](...CloneArray(arguments));
         }
     }
 
 
     // Create a short-hand, plus NoConflict
-    let _Old = window._;
-    window._ = PublicEnumerable;
+	if(window !== undefined){
+		_Old = window._;
+		window._ = PublicEnumerable;
+	}
     return PublicEnumerable;
 })());
+
+function testEnumerable() {
+    let arr = [];
+    for (let i = 0; i < 1000000; i++) {
+        arr.push({
+            a: Math.floor(Math.random() * 300),
+            b: Math.floor(Math.random() * 300),
+            c: Math.floor(Math.random() * 300)
+        });
+    }
+    let e = Enumerable.From(arr);
+
+    function TimeAction(act) {
+        let a = Date.now();
+        act();
+        let b = Date.now();
+        console.log(b - a);
+    }
+
+    function xxx() {
+        let joinData = [{
+            "a": 30,
+            "b": 30
+        }, {
+            "a": 50,
+            "b": 5
+        }];
+        let h = e
+            .Where(x => x.a <= 1500)
+            .Select(x => ({
+            name: x.a,
+            transformed: Math.random(),
+            transformed2: Math.random()
+        }))
+            .OrderByDescending(z => z.name)
+            .ThenByDescending(z => z.transformed)
+            .GroupBy(x => ({
+                Name: x.name
+            }))
+            .OrderBy(x => x.Items.length)
+            .FullJoin(
+                joinData, z => ({a:z.Key.Name}), z2 => ({a:z2.a}), (a, b) => ({
+                    "KEY": a ? a.Key : b.a,
+					"NAME": a ? a.Key.Name : b.a,
+                    "B": b ? b.b : null,
+                    "LENGTH": a ? a.Items.Count() : 0,
+					"A" : a,
+					"B" : b
+                }), (a) => ({
+					"KEY": "Unmatched-LEFT",
+					"NAME": a.Key.Name,
+                    "LENGTH": a.Items.length					
+				}), (b) => ({
+					"KEY": "Unmatched-RIGHT",
+					"NAME": b,
+                    "LENGTH": b					
+				})
+            )
+            .OrderByDescending(y => y.LENGTH)
+            .ToArray();
+        console.log(h);
+    }
+
+    function xxx2() {
+        let joinData = [{
+            "a": 30,
+            "b": 30
+        }, {
+            "a": 50,
+            "b": 5
+        }];
+        let arr = e.Data;
+        let newArr = [];
+
+        for (let item of arr) {
+            if (item.a <= 1500) {
+                newArr.push({
+                    name: item.a,
+                    transformed: Math.random(),
+                    transformed2: Math.random()
+                });
+            }
+        }
+
+        newArr.sort((a, b) => {
+            if (a.name < b.name) {
+                return 1;
+            }
+            if (a.name > b.name) {
+                return -1;
+            }
+            if (a.transformed < b.transformed) {
+                return 1;
+            }
+            if (a.transformed > b.transformed) {
+                return -1;
+            }
+            return 0;
+        });
+
+        let groups = [];
+        let groupsIdx = [];
+
+        for (let item of newArr) {
+            let key = item.name;
+            if (groupsIdx[key] == undefined) {
+                groupsIdx[key] = groups.length;
+                groups.push({
+                    Items: [],
+                    Key: key
+                });
+            }
+            let idx = groupsIdx[key];
+            groups[idx].Items.push(item);
+        }
+
+        newArr = groups;
+
+        newArr.sort((a, b) => {
+            if (a.Items.length > b.Items.length) {
+                return 1;
+            }
+            if (a.Items.length < b.Items.length) {
+                return -1;
+            }
+            return 0;
+        });
+        console.log(newArr);
+    }
+
+    TimeAction(xxx);
+    //TimeAction(xxx2);
+}
+
+
+
+
+function test() {
+    let numbers = Enumerable.RangeTo(1, 1000000).ToArray()
+    let e = Enumerable.From(numbers);
+    let a = Date.now();
+    let sumOfEvenSquares = e
+        .Where(n => n % 2 === 0)
+        .Select(n => n * n).ToArray()
+    let b = Date.now()
+    return b - a;
+}
+
+//let eBig = _.Range(0, 1000000, 1);
+//let eSmall = _.Range(0, 100, 1);
+//let eMed = _.Range(0, 25000, 1);
